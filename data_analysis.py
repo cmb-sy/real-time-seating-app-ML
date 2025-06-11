@@ -1,18 +1,32 @@
+#!/usr/bin/env python3
+
 """
-データ分析モジュール
-Supabaseから取得したdensity_historyデータの分析と可視化
+データ分析モジュール - Supabaseから取得したdensity_historyデータの分析を行う
+
+主な機能:
+- 基本統計の取得
+- 曜日別分析
+- 相関分析  
+- 可視化
 """
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from database import supabase_client
 from typing import Dict, List, Tuple
 import logging
+import sys
+from supabase import create_client
+import config
+
+# 日本語フォントの設定
+plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', 'sans-serif']
+matplotlib.rcParams['axes.unicode_minus'] = False
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +36,12 @@ class DataAnalyzer:
     def __init__(self):
         """初期化"""
         self.df = None
-        self.day_names = {
-            0: "日曜", 1: "月曜", 2: "火曜", 3: "水曜", 
-            4: "木曜", 5: "金曜", 6: "土曜"
-        }
+        self.df_weekdays = None
+        
+        # Supabaseクライアント
+        self.supabase_client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+        
+        # 曜日名マッピング（0-4: 月-金）
         self.weekday_names = {
             0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"
         }
@@ -39,7 +55,7 @@ class DataAnalyzer:
         """
         try:
             logger.info("Supabaseからデータを取得中...")
-            response = supabase_client.table("density_history").select("*").execute()
+            response = self.supabase_client.table("density_history").select("*").execute()
             
             # DataFrameに変換
             self.df = pd.DataFrame(response.data)
@@ -282,6 +298,129 @@ class DataAnalyzer:
         }
         
         return analysis
+    
+    def analyze_by_month(self) -> Dict:
+        """
+        月別分析を実行
+        
+        Returns:
+            Dict: 月別統計
+        """
+        if self.df is None:
+            self.load_data_from_supabase()
+        
+        # 月情報を追加
+        df_with_month = self.df_weekdays.copy()
+        df_with_month['month'] = df_with_month['created_at'].dt.month
+        df_with_month['year_month'] = df_with_month['created_at'].dt.strftime('%Y-%m')
+        
+        # 月別の統計情報
+        monthly_stats = {}
+        
+        # 年月別の分析
+        for year_month in sorted(df_with_month['year_month'].unique()):
+            month_data = df_with_month[df_with_month['year_month'] == year_month]
+            
+            if len(month_data) > 0:
+                monthly_stats[year_month] = {
+                    "レコード数": len(month_data),
+                    "density_rate": {
+                        "平均": float(month_data['density_rate'].mean()),
+                        "中央値": float(month_data['density_rate'].median()),
+                        "標準偏差": float(month_data['density_rate'].std()),
+                        "最小": float(month_data['density_rate'].min()),
+                        "最大": float(month_data['density_rate'].max())
+                    },
+                    "occupied_seats": {
+                        "平均": float(month_data['occupied_seats'].mean()),
+                        "中央値": float(month_data['occupied_seats'].median()),
+                        "標準偏差": float(month_data['occupied_seats'].std()),
+                        "最小": int(month_data['occupied_seats'].min()),
+                        "最大": int(month_data['occupied_seats'].max())
+                    }
+                }
+        
+        return monthly_stats
+    
+    def get_weekday_visualization_data(self) -> Dict:
+        """
+        曜日別可視化用のデータを取得
+        
+        Returns:
+            Dict: 可視化用データ
+        """
+        if self.df is None:
+            self.load_data_from_supabase()
+        
+        # 曜日別データの準備
+        weekday_data = self.df_weekdays.copy()
+        weekday_data['weekday_name'] = weekday_data['day_of_week'].map(self.weekday_names)
+        
+        # 曜日別の統計データ
+        visualization_data = {
+            "weekday_density_rate": {},
+            "weekday_occupied_seats": {},
+            "weekday_averages": {}
+        }
+        
+        for day in [0, 1, 2, 3, 4]:  # 月-金
+            day_data = weekday_data[weekday_data['day_of_week'] == day]
+            day_name = self.weekday_names[day]
+            
+            if len(day_data) > 0:
+                # 密度率データ
+                visualization_data["weekday_density_rate"][day_name] = {
+                    "values": day_data['density_rate'].tolist(),
+                    "mean": float(day_data['density_rate'].mean()),
+                    "median": float(day_data['density_rate'].median()),
+                    "std": float(day_data['density_rate'].std())
+                }
+                
+                # 占有座席数データ
+                visualization_data["weekday_occupied_seats"][day_name] = {
+                    "values": day_data['occupied_seats'].tolist(),
+                    "mean": float(day_data['occupied_seats'].mean()),
+                    "median": float(day_data['occupied_seats'].median()),
+                    "std": float(day_data['occupied_seats'].std())
+                }
+                
+                # 平均値
+                visualization_data["weekday_averages"][day_name] = {
+                    "density_rate_avg": float(day_data['density_rate'].mean()),
+                    "occupied_seats_avg": float(day_data['occupied_seats'].mean()),
+                    "record_count": len(day_data)
+                }
+        
+        return visualization_data
+    
+    def get_monthly_averages(self) -> Dict:
+        """
+        月別平均値を取得
+        
+        Returns:
+            Dict: 月別平均値
+        """
+        if self.df is None:
+            self.load_data_from_supabase()
+        
+        # 月情報を追加
+        df_with_month = self.df_weekdays.copy()
+        df_with_month['year_month'] = df_with_month['created_at'].dt.strftime('%Y-%m')
+        
+        # 月別平均値
+        monthly_averages = {}
+        
+        for year_month in sorted(df_with_month['year_month'].unique()):
+            month_data = df_with_month[df_with_month['year_month'] == year_month]
+            
+            if len(month_data) > 0:
+                monthly_averages[year_month] = {
+                    "density_rate_avg": float(month_data['density_rate'].mean()),
+                    "occupied_seats_avg": float(month_data['occupied_seats'].mean()),
+                    "record_count": len(month_data)
+                }
+        
+        return monthly_averages
     
     def prepare_ml_data(self) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
         """

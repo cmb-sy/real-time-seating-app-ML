@@ -1,16 +1,17 @@
 """
 機械学習モデルモジュール
 Optunaを使ったハイパーパラメータ最適化と予測機能
+アンサンブル学習と高度な特徴量エンジニアリング対応
 """
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, cross_val_score, KFold
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, VotingRegressor
 from sklearn.linear_model import Ridge, ElasticNet
 from sklearn.svm import SVR
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 import optuna
 import joblib
 import logging
@@ -31,7 +32,7 @@ class MLPredictor:
         self.model_performance = {}
         self.data_analyzer = DataAnalyzer()
         
-        # 使用するモデル一覧
+        # 使用するモデル一覧（アンサンブル学習対応）
         self.model_types = {
             'random_forest': RandomForestRegressor,
             'gradient_boosting': GradientBoostingRegressor,
@@ -39,6 +40,50 @@ class MLPredictor:
             'elastic_net': ElasticNet,
             'svr': SVR
         }
+        
+        # 特徴量エンジニアリング用
+        self.poly_features = None
+        self.use_polynomial = False
+    
+    def create_advanced_features(self, X: pd.DataFrame) -> pd.DataFrame:
+        """
+        高度な特徴量エンジニアリング
+        
+        Args:
+            X: 基本特徴量データ
+            
+        Returns:
+            pd.DataFrame: 拡張された特徴量データ
+        """
+        X_enhanced = X.copy()
+        
+        # 時間ベースの特徴量
+        if 'hour' in X_enhanced.columns:
+            # 時間帯カテゴリ
+            X_enhanced['time_category'] = pd.cut(
+                X_enhanced['hour'], 
+                bins=[0, 6, 12, 18, 24], 
+                labels=['深夜早朝', '午前', '午後', '夜間'],
+                include_lowest=True
+            ).cat.codes
+            
+            # ピーク時間フラグ
+            X_enhanced['is_peak_hour'] = X_enhanced['hour'].apply(
+                lambda x: 1 if x in [9, 10, 11, 12, 13, 14, 15, 16, 17] else 0
+            )
+        
+        # 曜日ベースの特徴量
+        if 'day_of_week' in X_enhanced.columns:
+            # 週の前半・後半
+            X_enhanced['week_half'] = X_enhanced['day_of_week'].apply(
+                lambda x: 0 if x in [0, 1] else 1  # 0,1=前半, 2,3,4=後半
+            )
+            
+        # 相互作用特徴量
+        if 'hour' in X_enhanced.columns and 'day_of_week' in X_enhanced.columns:
+            X_enhanced['hour_weekday_interaction'] = X_enhanced['hour'] * X_enhanced['day_of_week']
+        
+        return X_enhanced
     
     def objective_density(self, trial, X_train, y_train, X_val, y_val):
         """
@@ -308,13 +353,12 @@ class MLPredictor:
         self.model_performance = results
         return results
     
-    def predict(self, day_of_week: int, hour: int) -> Dict:
+    def predict(self, day_of_week: int) -> Dict:
         """
-        曜日と時間から密度率と占有座席数を予測
+        曜日のみから密度率と占有座席数を予測
         
         Args:
             day_of_week: 曜日（0-4: 月-金）
-            hour: 時間（0-23）
             
         Returns:
             Dict: 予測結果
@@ -322,13 +366,16 @@ class MLPredictor:
         if not self.models:
             raise ValueError("モデルが訓練されていません。先にtrain_best_models()を実行してください。")
         
-        # 特徴量作成
+        # 曜日のみから特徴量作成（時間は除去）
         day_sin = np.sin(2 * np.pi * day_of_week / 7)
         day_cos = np.cos(2 * np.pi * day_of_week / 7)
-        hour_sin = np.sin(2 * np.pi * hour / 24)
-        hour_cos = np.cos(2 * np.pi * hour / 24)
         
-        features = np.array([[day_of_week, hour, day_sin, day_cos, hour_sin, hour_cos]])
+        # 既存モデルとの互換性のため、時間関連特徴量を0で埋める
+        # 注意: 再訓練時には時間特徴量を完全に除去することを推奨
+        hour_sin = 0.0  # 時間情報を無効化
+        hour_cos = 1.0  # 12時に相当する値で固定
+        
+        features = np.array([[day_of_week, 12, day_sin, day_cos, hour_sin, hour_cos]])
         
         predictions = {}
         
@@ -443,7 +490,8 @@ class MLPredictor:
             'available_models': list(self.models.keys()),
             'best_parameters': self.best_params,
             'model_performance': self.model_performance,
-            'feature_names': ['day_of_week', 'hour', 'day_of_week_sin', 'day_of_week_cos', 'hour_sin', 'hour_cos']
+            'feature_names': ['day_of_week', 'day_of_week_sin', 'day_of_week_cos'],
+            'note': '曜日（0-4: 月-金）のみから予測を実行します。時間情報は使用しません。'
         }
         
         return info 

@@ -98,14 +98,8 @@ async def get_all_density_history():
         
         logger.info(f"データ取得成功: {len(data)}件")
         
-        result = {
-            "success": True,
-            "count": len(data),
-            "data": data,
-            "message": f"density_historyテーブルから {len(data)} 件のデータを取得しました"
-        }
-        
-        return result
+        # 辞書ではなく、データのリストを直接返す
+        return data
         
     except Exception as e:
         # エラーハンドリング
@@ -276,6 +270,87 @@ async def get_correlation_analysis():
             }
         )
 
+@app.get("/analysis/monthly")
+async def get_monthly_analysis():
+    """
+    月別分析結果を取得
+    
+    Returns:
+        Dict[str, Any]: 月別分析結果
+    """
+    try:
+        monthly_analysis = data_analyzer.analyze_by_month()
+        
+        return {
+            "success": True,
+            "data": monthly_analysis,
+            "message": "月別分析を実行しました"
+        }
+    except Exception as e:
+        logger.error(f"月別分析エラー: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "月別分析エラーが発生しました",
+                "message": str(e)
+            }
+        )
+
+@app.get("/analysis/weekday_visualization")
+async def get_weekday_visualization():
+    """
+    曜日別可視化データを取得
+    
+    Returns:
+        Dict[str, Any]: 曜日別可視化データ
+    """
+    try:
+        visualization_data = data_analyzer.get_weekday_visualization_data()
+        
+        return {
+            "success": True,
+            "data": visualization_data,
+            "message": "曜日別可視化データを取得しました"
+        }
+    except Exception as e:
+        logger.error(f"曜日別可視化データ取得エラー: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "曜日別可視化データ取得エラーが発生しました",
+                "message": str(e)
+            }
+        )
+
+@app.get("/analysis/monthly_averages")
+async def get_monthly_averages():
+    """
+    月別平均値を取得
+    
+    Returns:
+        Dict[str, Any]: 月別平均値
+    """
+    try:
+        monthly_averages = data_analyzer.get_monthly_averages()
+        
+        return {
+            "success": True,
+            "data": monthly_averages,
+            "message": "月別平均値を取得しました"
+        }
+    except Exception as e:
+        logger.error(f"月別平均値取得エラー: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "月別平均値取得エラーが発生しました",
+                "message": str(e)
+            }
+        )
+
 @app.post("/analysis/create_visualizations")
 async def create_visualizations():
     """
@@ -388,55 +463,6 @@ async def train_models():
             }
         )
 
-@app.get("/ml/predict")
-async def predict_values(day_of_week: int, hour: int):
-    """
-    曜日と時間から密度率と占有座席数を予測
-    
-    Args:
-        day_of_week: 曜日（0-4: 月-金）
-        hour: 時間（0-23）
-    
-    Returns:
-        Dict[str, Any]: 予測結果
-    """
-    try:
-        # 入力検証
-        if day_of_week < 0 or day_of_week > 4:
-            raise ValueError("day_of_weekは0-4（月-金）の範囲で指定してください")
-        
-        if hour < 0 or hour > 23:
-            raise ValueError("hourは0-23の範囲で指定してください")
-        
-        # 予測実行
-        predictions = ml_predictor.predict(day_of_week, hour)
-        
-        # 曜日名を追加
-        weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
-        
-        return {
-            "success": True,
-            "data": {
-                "input": {
-                    "day_of_week": day_of_week,
-                    "weekday_name": weekday_names[day_of_week],
-                    "hour": hour
-                },
-                "predictions": predictions
-            },
-            "message": f"{weekday_names[day_of_week]} {hour}時の予測を実行しました"
-        }
-    except Exception as e:
-        logger.error(f"予測エラー: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "error": "予測エラーが発生しました",
-                "message": str(e)
-            }
-        )
-
 @app.get("/ml/model_info")
 async def get_model_info():
     """
@@ -464,7 +490,52 @@ async def get_model_info():
             }
         )
 
-@app.get("/ml/predict_day_schedule")
+@app.get("/ml/predict")
+async def predict_by_weekday(day_of_week: int):
+    """
+    指定曜日での予測を取得
+    
+    Args:
+        day_of_week: 曜日（0-4: 月-金）
+    
+    Returns:
+        Dict[str, Any]: 予測結果
+    """
+    try:
+        if day_of_week < 0 or day_of_week > 4:
+            raise ValueError("day_of_weekは0-4（月-金）の範囲で指定してください")
+        
+        # 曜日のみから予測を取得
+        prediction = ml_predictor.predict(day_of_week)
+        
+        # 曜日名を追加
+        weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
+        
+        result = {
+            "success": True,
+            "day_of_week": day_of_week,
+            "weekday_name": weekday_names[day_of_week],
+            "predictions": {
+                "density_rate": round(prediction["density_rate"], 2),
+                "occupied_seats": int(round(prediction["occupied_seats"]))
+            },
+            "message": f"{weekday_names[day_of_week]}の予測を生成しました"
+        }
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"予測生成エラー: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "予測生成エラーが発生しました",
+                "message": str(e)
+            }
+        )
+
+@app.get("/ml/predict_schedule")
 async def predict_day_schedule(day_of_week: int):
     """
     指定曜日の1日の予測スケジュールを取得
@@ -479,19 +550,21 @@ async def predict_day_schedule(day_of_week: int):
         if day_of_week < 0 or day_of_week > 4:
             raise ValueError("day_of_weekは0-4（月-金）の範囲で指定してください")
         
-        # 1時間ごとの予測を実行
+        # 曜日のみから予測を取得
+        prediction = ml_predictor.predict(day_of_week)
+        
+        # 従来の24時間形式との互換性のため、同じ予測を24時間分返す
         schedule = []
         for hour in range(24):
-            predictions = ml_predictor.predict(day_of_week, hour)
             schedule.append({
                 "hour": hour,
                 "time": f"{hour:02d}:00",
-                "predictions": predictions
+                "predictions": prediction  # 全ての時間で同じ予測値
             })
         
         weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
         
-        return {
+        result = {
             "success": True,
             "data": {
                 "day_of_week": day_of_week,
@@ -500,6 +573,9 @@ async def predict_day_schedule(day_of_week: int):
             },
             "message": f"{weekday_names[day_of_week]}の1日予測スケジュールを作成しました"
         }
+            
+        return result
+        
     except Exception as e:
         logger.error(f"スケジュール予測エラー: {str(e)}")
         raise HTTPException(
@@ -554,13 +630,16 @@ async def generate_frontend_data():
         weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
         
         for day in range(0, 5):
+            # 曜日のみから予測を取得
+            day_prediction = ml_predictor.predict(day)
+            
+            # 従来の24時間形式との互換性のため、同じ予測を24時間分返す
             schedule = []
             for hour in range(24):
-                predictions = ml_predictor.predict(day_of_week=day, hour=hour)
                 schedule.append({
                     "hour": hour,
                     "time": f"{hour:02d}:00",
-                    "predictions": predictions
+                    "predictions": day_prediction  # 全ての時間で同じ予測値
                 })
             
             prediction_schedules[weekday_names[day]] = {
