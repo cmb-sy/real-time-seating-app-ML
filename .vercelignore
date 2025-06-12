@@ -1,18 +1,39 @@
-# Python cache files and bytecode
+# Python cache files
 **/__pycache__/
-**/*.py[cod]
-**/*$py.class
 *.pyc
 *.pyo
 *.pyd
-.Python
 
 # Virtual environments
 .venv/
 venv/
 env/
-ENV/
-.env
+
+# IDE files
+.vscode/
+.idea/
+.DS_Store
+
+# Git files
+.git/
+
+# Large data files (but keep models)
+data/
+plots/
+frontend_data/
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+*.html
+api_test.html
+
+# Python cache files and bytecode
+**/*.py[cod]
+**/*$py.class
+.Python
 
 # Package management
 uv.lock
@@ -29,7 +50,6 @@ Pipfile.lock
 # *.weights
 
 # Data files
-data/
 *.csv
 *.xlsx
 *.json
@@ -41,8 +61,6 @@ data/
 .ipynb_checkpoints/
 
 # Analysis and visualization
-plots/
-frontend_data/
 *.png
 *.jpg
 *.jpeg
@@ -66,23 +84,16 @@ README.md
 !FRONTEND_API_GUIDE.md
 
 # Test files
-api_test.html
 api_guide.md
 frontend_api_guide.md
 FRONTEND_INTEGRATION.md
 last_run.txt
 
 # IDE and editor files
-.vscode/
-.idea/
 *.swp
 *.swo
-.DS_Store
 Thumbs.db
-
-# Git files
-.git/
-.gitignore
+desktop.ini
 
 # Public directory (if not needed for API)
 public/
@@ -94,7 +105,6 @@ public/
 *.bak
 
 # OS files
-.DS_Store
 Thumbs.db
 desktop.ini
 
@@ -180,7 +190,6 @@ Pipfile.lock
 # ドキュメント
 *.md
 README.md
-api_test.html
 api_guide.md
 frontend_api_guide.md
 FRONTEND_INTEGRATION.md
