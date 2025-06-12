@@ -1,5 +1,5 @@
 """
-APIルートエンドポイント用Vercelサーバーレス関数
+ヘルスチェック用の専用Vercelサーバーレス関数
 """
 from http.server import BaseHTTPRequestHandler
 from datetime import datetime
@@ -24,17 +24,16 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin')
         self.end_headers()
         
-        # APIの情報を返す
+        # レスポンスデータの準備
         response_data = {
-            "message": "Real-time Seating App ML API is running (simplified version)!",
-            "version": "1.0.1",
-            "endpoints": [
-                {"path": "/api", "method": "GET", "description": "このAPIの情報"},
-                {"path": "/api/health", "method": "GET", "description": "APIの健全性チェック"},
-                {"path": "/api/predictions/today-tomorrow", "method": "GET", "description": "今日と明日の混雑予測"},
-                {"path": "/api/predictions/weekly-average", "method": "GET", "description": "週間平均の混雑予測"}
-            ],
-            "timestamp": datetime.now().isoformat()
+            "status": "healthy",
+            "database": "simulated",
+            "models_loaded": False,
+            "available_models": [],
+            "environment": "production-lite",
+            "message": "簡略化されたAPIが正常に動作しています",
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0.1"
         }
         
         # JSONレスポンスを返す

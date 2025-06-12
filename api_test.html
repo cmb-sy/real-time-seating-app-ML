@@ -62,7 +62,7 @@
     </style>
   </head>
   <body>
-    <h1>API接続テスト</h1>
+    <h1>API接続テスト (更新版)</h1>
 
     <div>
       <label for="urlInput">APIベースURL:</label>
@@ -74,10 +74,13 @@
     </div>
 
     <div>
+      <h3>基本エンドポイント</h3>
+      <button onclick="testEndpoint('/api')">ルート情報</button>
       <button onclick="testEndpoint('/api/health')">ヘルスチェック</button>
-      <button onclick="testEndpoint('/health')">
-        ヘルスチェック (直接パス)
-      </button>
+    </div>
+
+    <div>
+      <h3>予測エンドポイント</h3>
       <button onclick="testEndpoint('/api/predictions/today-tomorrow')">
         今日・明日の予測
       </button>
@@ -87,8 +90,13 @@
     </div>
 
     <div>
-      <button onclick="testWithOptions()">CORSプリフライトテスト</button>
-      <button onclick="testWithNoCredentials()">credentials:omitテスト</button>
+      <h3>CORSテスト</h3>
+      <button onclick="testWithOptions('/api/health')">
+        CORSプリフライトテスト
+      </button>
+      <button onclick="testWithNoCredentials('/api/health')">
+        credentials:omitテスト
+      </button>
     </div>
 
     <h3>レスポンス結果:</h3>
@@ -109,7 +117,9 @@
             headers: {
               Accept: "application/json",
               "Content-Type": "application/json",
+              Origin: window.location.origin,
             },
+            credentials: "omit",
           });
 
           if (!response.ok) {
@@ -137,10 +147,10 @@
       }
 
       // CORSプリフライトテスト
-      async function testWithOptions() {
+      async function testWithOptions(endpoint) {
         const resultDiv = document.getElementById("result");
         const baseUrl = document.getElementById("urlInput").value;
-        const url = `${baseUrl}/api/health`;
+        const url = `${baseUrl}${endpoint}`;
 
         resultDiv.innerHTML = `<p class="loading">OPTIONSリクエスト中: ${url}...</p>`;
 
@@ -169,10 +179,10 @@
       }
 
       // credentials:omitテスト
-      async function testWithNoCredentials() {
+      async function testWithNoCredentials(endpoint) {
         const resultDiv = document.getElementById("result");
         const baseUrl = document.getElementById("urlInput").value;
-        const url = `${baseUrl}/api/health`;
+        const url = `${baseUrl}${endpoint}`;
 
         resultDiv.innerHTML = `<p class="loading">credentials:omitでリクエスト中: ${url}...</p>`;
 

@@ -2,7 +2,18 @@
 
 ## はじめに
 
-このガイドでは、フロントエンド（Next.js）からバックエンド API（Vercel 上の FastAPI）に接続する際の設定と呼び出し方法について説明します。
+このガイドでは、フロントエンド（Next.js）からバックエンド API（Vercel 上の Serverless Functions）に接続する際の設定と呼び出し方法について説明します。
+
+## 重要な更新（2023 年 6 月）
+
+API の構造を以下のように変更しました：
+
+- Vercel のサーバーレス関数を使用したシンプルな実装に変更
+- 各エンドポイントは `/api/` プレフィックスで始まります
+- 主要エンドポイントは：
+  - `/api/health` - ヘルスチェック
+  - `/api/predictions/today-tomorrow` - 今日と明日の予測
+  - `/api/predictions/weekly-average` - 週間平均予測
 
 ## API 接続設定
 
@@ -75,6 +86,7 @@ NEXT_PUBLIC_API_URL=https://real-time-seating-app-ml.vercel.app
 
 | 機能             | エンドポイント                  | メソッド | 説明                 |
 | ---------------- | ------------------------------- | -------- | -------------------- |
+| ルート情報       | /api                            | GET      | API の概要情報       |
 | ヘルスチェック   | /api/health                     | GET      | API の状態確認       |
 | 今日・明日の予測 | /api/predictions/today-tomorrow | GET      | 今日と明日の混雑予測 |
 | 週間平均予測     | /api/predictions/weekly-average | GET      | 曜日ごとの平均予測   |
