@@ -1,0 +1,51 @@
+# キャッシュや一時ファイル
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# 仮想環境
+.env
+.venv
+env/
+venv/
+ENV/
+
+# ローカル開発用ファイル
+plots/
+models/
+frontend_data/
+*.ipynb
+*.log
+
+# Gitとバージョン管理
+.git/
+.gitignore
+.github/
+
+# 開発中のデータ
+*.csv
+*.xlsx
+*.db
+*.sqlite3
+
+# ドキュメントと不要なマークダウン
+README.md
+FRONTEND_INTEGRATION.md
+frontend_api_guide.md
+*.md
+
+# テスト用ファイル
+test_*.py
+tests/
+
+# その他の大きなファイル
+*.lock
+*.toml
+*.json
+!vercel.json
+!package.json 
