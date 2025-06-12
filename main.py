@@ -5,6 +5,7 @@ FastAPI アプリケーション
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 import json
 import traceback
@@ -13,6 +14,7 @@ from database import supabase_client
 from data_analysis import DataAnalyzer
 from ml_models import MLPredictor
 from datetime import datetime
+import os
 
 # ログ設定
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +25,15 @@ app = FastAPI(
     title="Real-time Seating App ML API",
     description="リアルタイム座席アプリのML用API",
     version="1.0.0"
+)
+
+# CORS設定を追加
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 本番環境では具体的なオリジンを指定
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # グローバルインスタンス
@@ -76,13 +87,13 @@ async def health_check():
             }
         )
 
-@app.get("/density_history")
+@app.get("/density_history", response_model=List[Dict])
 async def get_all_density_history():
     """
     density_historyテーブルから全てのデータを取得
     
     Returns:
-        Dict[str, Any]: density_historyテーブルの全レコード
+        List[Dict]: density_historyテーブルの全レコード
     
     Raises:
         HTTPException: データベースエラーが発生した場合
@@ -98,7 +109,7 @@ async def get_all_density_history():
         
         logger.info(f"データ取得成功: {len(data)}件")
         
-        # 辞書ではなく、データのリストを直接返す
+        # リストを直接返す（FastAPIがJSONに変換）
         return data
         
     except Exception as e:
@@ -699,7 +710,6 @@ async def generate_frontend_data():
         }
         
         # 5. JSONファイルとして保存
-        import os
         os.makedirs("frontend_data", exist_ok=True)
         
         # タイムスタンプ付きファイル名
@@ -741,23 +751,23 @@ async def generate_frontend_data():
 @app.get("/frontend_data/latest")
 async def get_latest_frontend_data():
     """
-    フロントエンド向けの最新データを取得
+    最新のフロントエンド向けデータを取得
     
     Returns:
-        Dict[str, Any]: 最新の分析・予測データ
+        Dict[str, Any]: 最新の分析結果とJSONファイルパス
     """
     try:
-        import json
-        import os
+        # 最新のJSONファイルを探す
+        json_files = [f for f in os.listdir('.') if f.startswith('frontend_data_') and f.endswith('.json')]
         
-        latest_file = "frontend_data/latest_data.json"
-        
-        if not os.path.exists(latest_file):
+        if not json_files:
             return {
                 "success": False,
-                "error": "最新データが見つかりません",
-                "message": "先にgenerate_frontend_data()を実行してください。"
+                "message": "フロントエンド向けデータが見つかりません。先にgenerate_frontend_data()を実行してください。"
             }
+        
+        # 最新のファイルを取得
+        latest_file = max(json_files, key=lambda x: os.path.getctime(x))
         
         with open(latest_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -765,13 +775,147 @@ async def get_latest_frontend_data():
         return {
             "success": True,
             "data": data,
-            "message": "最新のフロントエンド向けデータを取得しました"
+            "file_path": latest_file,
+            "message": f"最新のフロントエンド向けデータを取得しました: {latest_file}"
         }
         
     except Exception as e:
-        logger.error(f"最新データ取得エラー: {str(e)}")
+        logger.error(f"フロントエンドデータ取得エラー: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "フロントエンドデータ取得エラーが発生しました",
+                "message": str(e)
+            }
+        )
+
+# フロントエンドが期待するAPIエンドポイントを追加
+@app.get("/api/predictions/today-tomorrow")
+async def get_today_tomorrow_predictions():
+    """
+    今日と明日の予測データを取得
+    
+    Returns:
+        Dict[str, Any]: 今日と明日の予測結果
+    """
+    try:
+        from datetime import datetime
+        
+        # 現在の曜日を取得（0=月曜日）
+        today_weekday = datetime.now().weekday()
+        tomorrow_weekday = (today_weekday + 1) % 7
+        
+        weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜", 5: "土曜", 6: "日曜"}
+        
+        # 平日のみ予測可能
+        predictions = {}
+        
+        if today_weekday <= 4:  # 月-金
+            today_prediction = ml_predictor.predict(today_weekday)
+            predictions["today"] = {
+                "day_of_week": today_weekday,
+                "weekday_name": weekday_names[today_weekday],
+                "predictions": {
+                    "density_rate": round(today_prediction["density_rate"], 2),
+                    "occupied_seats": int(round(today_prediction["occupied_seats"]))
+                }
+            }
+        else:
+            predictions["today"] = {
+                "day_of_week": today_weekday,
+                "weekday_name": weekday_names[today_weekday],
+                "predictions": None,
+                "message": "土日は予測データがありません"
+            }
+        
+        if tomorrow_weekday <= 4:  # 月-金
+            tomorrow_prediction = ml_predictor.predict(tomorrow_weekday)
+            predictions["tomorrow"] = {
+                "day_of_week": tomorrow_weekday,
+                "weekday_name": weekday_names[tomorrow_weekday],
+                "predictions": {
+                    "density_rate": round(tomorrow_prediction["density_rate"], 2),
+                    "occupied_seats": int(round(tomorrow_prediction["occupied_seats"]))
+                }
+            }
+        else:
+            predictions["tomorrow"] = {
+                "day_of_week": tomorrow_weekday,
+                "weekday_name": weekday_names[tomorrow_weekday],
+                "predictions": None,
+                "message": "土日は予測データがありません"
+            }
+        
         return {
-            "success": False,
-            "error": "最新データ取得でエラーが発生しました",
-            "message": str(e)
+            "success": True,
+            "data": predictions,
+            "message": "今日と明日の予測データを取得しました"
         }
+        
+    except Exception as e:
+        logger.error(f"今日明日予測エラー: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "今日明日予測エラーが発生しました",
+                "message": str(e)
+            }
+        )
+
+@app.get("/api/predictions/weekly-average")
+async def get_weekly_average_predictions():
+    """
+    週平均の予測データを取得
+    
+    Returns:
+        Dict[str, Any]: 週平均の予測結果
+    """
+    try:
+        # 各曜日の予測を取得
+        weekday_predictions = {}
+        weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
+        
+        total_density = 0
+        total_seats = 0
+        
+        for day in range(5):  # 月-金
+            prediction = ml_predictor.predict(day)
+            weekday_predictions[weekday_names[day]] = {
+                "day_of_week": day,
+                "weekday_name": weekday_names[day],
+                "predictions": {
+                    "density_rate": round(prediction["density_rate"], 2),
+                    "occupied_seats": int(round(prediction["occupied_seats"]))
+                }
+            }
+            total_density += prediction["density_rate"]
+            total_seats += prediction["occupied_seats"]
+        
+        # 週平均を計算
+        weekly_average = {
+            "average_density_rate": round(total_density / 5, 2),
+            "average_occupied_seats": round(total_seats / 5, 1),
+            "total_weekdays": 5
+        }
+        
+        return {
+            "success": True,
+            "data": {
+                "weekly_average": weekly_average,
+                "daily_predictions": weekday_predictions
+            },
+            "message": "週平均予測データを取得しました"
+        }
+        
+    except Exception as e:
+        logger.error(f"週平均予測エラー: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "週平均予測エラーが発生しました",
+                "message": str(e)
+            }
+        )

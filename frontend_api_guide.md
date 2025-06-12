@@ -24,6 +24,7 @@
 
 ```
 http://localhost:8000  (開発環境)
+Uvicorn running on http://127.0.0.1:8000
 ```
 
 ## 🔐 認証
