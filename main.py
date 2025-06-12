@@ -33,17 +33,11 @@ def get_cors_origins():
     cors_origins = os.getenv("CORS_ORIGINS", "")
     if cors_origins:
         return cors_origins.split(",")
-    # デフォルトは開発環境用の設定
     return [
-        "http://localhost:3000",  # Next.js開発サーバー
-        "http://localhost:3001",  # 代替ポート
+        "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "https://vercel.app",     # Vercel デプロイ
-        "https://*.vercel.app",   # Vercel プレビュー
-        "https://netlify.app",    # Netlify デプロイ
-        "https://*.netlify.app",  # Netlify プレビュー
-        "*"  # 最後のフォールバック（本番では削除推奨）
+        "https://v0-real-time-seating-app.vercel.app",
+        "https://real-time-seating-app-ml.vercel.app",
     ]
 
 app.add_middleware(
@@ -68,7 +62,8 @@ app.add_middleware(
         "X-Requested-With",
         "X-API-Key",
         "Cache-Control",
-        "Pragma"
+        "Pragma",
+        "Origin"  # Originヘッダーを追加
     ],
     expose_headers=[
         "X-Total-Count",
@@ -87,6 +82,12 @@ async def startup_event():
     """アプリケーション起動時の処理"""
     logger.info("アプリケーションを起動中...")
     
+    # 起動メッセージとAPIのURL情報を表示
+    host = os.getenv("API_HOST", "0.0.0.0")
+    port = os.getenv("API_PORT", "8000")
+    logger.info(f"API起動: http://{host}:{port}")
+    logger.info(f"CORS設定: {get_cors_origins()}")
+    
     # 保存済みモデルがあれば読み込み
     if ml_predictor.load_models():
         logger.info("保存済みモデルを読み込みました")
@@ -94,6 +95,7 @@ async def startup_event():
         logger.info("保存済みモデルが見つかりません")
 
 @app.get("/")
+@app.options("/")  # OPTIONSリクエスト対応
 async def root():
     """
     ルートエンドポイント
@@ -101,7 +103,18 @@ async def root():
     """
     return {"message": "Real-time Seating App ML API is running!"}
 
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    """
+    プレフライトリクエスト(OPTIONS)のためのハンドラー
+    全てのパスに対するOPTIONSリクエストに応答
+    """
+    return {}
+
 @app.get("/health")
+@app.get("/api/health-check")  # フロントエンドの呼び出しに合わせたエンドポイントを追加
+@app.options("/health")  # OPTIONSリクエスト対応
+@app.options("/api/health-check")  # OPTIONSリクエスト対応
 async def health_check():
     """
     ヘルスチェックエンドポイント
