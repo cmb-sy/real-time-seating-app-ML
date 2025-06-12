@@ -1,14 +1,10 @@
-"""
-Supabase設定ファイル
-"""
+import os
+import os
+from dotenv import load_dotenv
 
-# Supabase設定
-SUPABASE_URL = "https://howmdafbaqrbyzbcpazk.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhvd21kYWZiYXFyYnl6YmNwYXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg3NDA5NDYsImV4cCI6MjA2NDMxNjk0Nn0.6IFpij4HaWv4TxXF1-rFcbAL1fqDnJJZ4p5sNbCrzWY"
-SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhvd21kYWZiYXFyYnl6YmNwYXprIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODc0MDk0NiwiZXhwIjoyMDY0MzE2OTQ2fQ.45czt-j0AxR679-1Vhz6IERiQxozT8hQqgKVpU3RpBM"
+# .envファイルから環境変数を読み込む
+load_dotenv()
 
-class Config:
-    """設定クラス"""
-    SUPABASE_URL = SUPABASE_URL
-    SUPABASE_KEY = SUPABASE_KEY
-    SUPABASE_SERVICE_KEY = SUPABASE_SERVICE_KEY 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
