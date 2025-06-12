@@ -12,14 +12,6 @@
       "dest": "src/api/index.py"
     },
     {
-      "src": "/simple",
-      "dest": "src/api/simple.py"
-    },
-    {
-      "src": "/test",
-      "dest": "src/api/test.py"
-    },
-    {
       "src": "/health",
       "dest": "src/api/health.py"
     },
