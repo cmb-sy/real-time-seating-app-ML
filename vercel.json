@@ -1,57 +1,63 @@
 {
-  "functions": {
-    "src/api/*.py": {
-      "runtime": "python3.9"
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/api/*.py",
+      "use": "@vercel/python"
     }
-  },
-  "rewrites": [
+  ],
+  "routes": [
     {
-      "source": "/",
-      "destination": "/src/api/index"
+      "src": "/",
+      "dest": "src/api/index.py"
     },
     {
-      "source": "/test",
-      "destination": "/src/api/test"
+      "src": "/simple",
+      "dest": "src/api/simple.py"
     },
     {
-      "source": "/health",
-      "destination": "/src/api/health"
+      "src": "/test",
+      "dest": "src/api/test.py"
     },
     {
-      "source": "/api/health",
-      "destination": "/src/api/health"
+      "src": "/health",
+      "dest": "src/api/health.py"
     },
     {
-      "source": "/predictions/today-tomorrow",
-      "destination": "/src/api/predictions_today_tomorrow"
+      "src": "/api/health",
+      "dest": "src/api/health.py"
     },
     {
-      "source": "/api/predictions/today-tomorrow",
-      "destination": "/src/api/predictions_today_tomorrow"
+      "src": "/predictions/today-tomorrow",
+      "dest": "src/api/predictions_today_tomorrow.py"
     },
     {
-      "source": "/predictions/weekly-average",
-      "destination": "/src/api/predictions_weekly_average"
+      "src": "/api/predictions/today-tomorrow",
+      "dest": "src/api/predictions_today_tomorrow.py"
     },
     {
-      "source": "/api/predictions/weekly-average",
-      "destination": "/src/api/predictions_weekly_average"
+      "src": "/predictions/weekly-average",
+      "dest": "src/api/predictions_weekly_average.py"
     },
     {
-      "source": "/supabase/sync",
-      "destination": "/src/api/supabase_sync"
+      "src": "/api/predictions/weekly-average",
+      "dest": "src/api/predictions_weekly_average.py"
     },
     {
-      "source": "/api/supabase/sync",
-      "destination": "/src/api/supabase_sync"
+      "src": "/supabase/sync",
+      "dest": "src/api/supabase_sync.py"
     },
     {
-      "source": "/ml/predict",
-      "destination": "/src/api/predictions_today_tomorrow"
+      "src": "/api/supabase/sync",
+      "dest": "src/api/supabase_sync.py"
     },
     {
-      "source": "/analysis/weekday_analysis",
-      "destination": "/src/api/predictions_today_tomorrow"
+      "src": "/ml/predict",
+      "dest": "src/api/predictions_today_tomorrow.py"
+    },
+    {
+      "src": "/analysis/weekday_analysis",
+      "dest": "src/api/predictions_today_tomorrow.py"
     }
   ]
 }
