@@ -27,13 +27,55 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS設定を追加
+# CORS設定を追加（環境に応じて柔軟に設定）
+def get_cors_origins():
+    """環境変数からCORSオリジンを取得"""
+    cors_origins = os.getenv("CORS_ORIGINS", "")
+    if cors_origins:
+        return cors_origins.split(",")
+    # デフォルトは開発環境用の設定
+    return [
+        "http://localhost:3000",  # Next.js開発サーバー
+        "http://localhost:3001",  # 代替ポート
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "https://vercel.app",     # Vercel デプロイ
+        "https://*.vercel.app",   # Vercel プレビュー
+        "https://netlify.app",    # Netlify デプロイ
+        "https://*.netlify.app",  # Netlify プレビュー
+        "*"  # 最後のフォールバック（本番では削除推奨）
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番環境では具体的なオリジンを指定
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "OPTIONS",
+        "HEAD",
+        "PATCH"
+    ],
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-API-Key",
+        "Cache-Control",
+        "Pragma"
+    ],
+    expose_headers=[
+        "X-Total-Count",
+        "X-Page-Count", 
+        "Content-Range"
+    ],
+    max_age=3600,  # プリフライトリクエストのキャッシュ時間（秒）
 )
 
 # グローバルインスタンス
