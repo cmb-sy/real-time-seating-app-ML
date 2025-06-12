@@ -3,24 +3,33 @@
 *.pyc
 *.pyo
 *.pyd
+**/*.py[cod]
+**/*$py.class
 
 # Virtual environments
 .venv/
 venv/
 env/
+ENV/
 
 # IDE files
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
+desktop.ini
 
 # Git files
 .git/
 
-# Large data files (but keep models)
+# Data files (exclude training data, keep models)
 data/
 plots/
 frontend_data/
+*.csv
+*.xlsx
+*.db
+*.sqlite3
 
 # Documentation
 *.md
@@ -30,44 +39,18 @@ frontend_data/
 *.html
 api_test.html
 
-# Python cache files and bytecode
-**/*.py[cod]
-**/*$py.class
-.Python
-
-# Package management
-uv.lock
-poetry.lock
-Pipfile.lock
-
-# 大きなモデルファイル（必要なものは含める）
-# モデルファイルは含める必要があります！
-# models/
-# *.pkl
-# *.joblib
-# *.h5
-# *.model
-# *.weights
-
-# Data files
-*.csv
-*.xlsx
-*.json
-*.db
-*.sqlite3
-
 # Jupyter notebooks
 *.ipynb
 .ipynb_checkpoints/
 
-# Analysis and visualization
+# Images
 *.png
 *.jpg
 *.jpeg
 *.gif
 *.svg
 
-# Large Python files (keep only API files)
+# Training scripts (not needed for inference)
 main.py
 ml_models.py
 data_analysis.py
@@ -78,148 +61,16 @@ start_server.py
 config.py
 clean_cache.py
 
-# Documentation and guides
-README.md
-*.md
-!FRONTEND_API_GUIDE.md
-
-# Test files
-api_guide.md
-frontend_api_guide.md
-FRONTEND_INTEGRATION.md
-last_run.txt
-
-# IDE and editor files
-*.swp
-*.swo
-Thumbs.db
-desktop.ini
-
-# Public directory (if not needed for API)
-public/
-
 # Temporary files
 *.tmp
 *.temp
 *.log
 *.bak
 
-# OS files
-Thumbs.db
-desktop.ini
-
-# APIとSRC/APIとvercel.json、モデル、設定ファイルは含める
-# *
-# !api/
-# !src/
-# !src/api/
-# !src/models/
-# !vercel.json
-# !requirements.txt
-# !pyproject.toml
-
-# APIディレクトリ内でも不要なファイルを除外
-api/__pycache__/
-api/*.pyc
-api/*.pyo
-api/*.pyd
-api/.DS_Store
-
-# 最重要: 大きな仮想環境ディレクトリを除外
-.venv
-.venv/
-venv
-venv/
-env
-env/
-ENV
-ENV/
-
-# Pythonキャッシュ
-__pycache__
-__pycache__/
-**/__pycache__
-**/__pycache__/
-*.pyc
-*.pyo
-*.pyd
-**/*.py[cod]
-**/*$py.class
-
-# 機械学習関連の大きなファイル（必要なものは含める）
-# models
-# models/
-plots
-plots/
-data
-data/
-frontend_data
-frontend_data/
-# *.pkl
-# *.joblib
-# *.h5
-# *.model
-# *.weights
-
-# パッケージ管理ファイル
+# Package management
 uv.lock
 poetry.lock
 Pipfile.lock
-# requirements.txt
-# pyproject.toml
 
-# 不要なPythonファイル
-# main.py
-# ml_models.py
-# data_analysis.py
-# train_ml_models.py
-# scheduler.py
-# config.py
-# database.py
-# start_server.py
-# clean_cache.py
-
-# データファイル
-*.csv
-*.xlsx
-*.db
-*.sqlite3
-*.json
-!vercel.json
-
-# ドキュメント
-*.md
-README.md
-api_guide.md
-frontend_api_guide.md
-FRONTEND_INTEGRATION.md
-last_run.txt
-
-# Jupyter
-*.ipynb
-.ipynb_checkpoints
-.ipynb_checkpoints/
-
-# IDE/OS
-.vscode
-.vscode/
-.idea
-.idea/
-.DS_Store
-Thumbs.db
-desktop.ini
-*.swp
-*.swo
-
-# 画像
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
-
-# その他
-*.tmp
-*.temp
-*.log
-*.bak 
+# Public directory
+public/ 
