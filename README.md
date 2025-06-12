@@ -1,4 +1,4 @@
-# Real-time Seating Prediction Application (ML Version)
+# Real-time Seating Prediction ML API
 
 This project provides real-time seating predictions using Supabase as a database and Vercel serverless functions for API delivery.
 
