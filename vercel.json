@@ -1,5 +1,16 @@
 {
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/api/*.py",
+      "use": "@vercel/python"
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/",
+      "destination": "/src/api/index"
+    },
     {
       "source": "/health",
       "destination": "/src/api/health"
@@ -31,14 +42,16 @@
     {
       "source": "/api/supabase/sync",
       "destination": "/src/api/supabase_sync"
+    },
+    {
+      "source": "/ml/predict",
+      "destination": "/src/api/predictions_today_tomorrow"
+    },
+    {
+      "source": "/analysis/weekday_analysis",
+      "destination": "/src/api/predictions_today_tomorrow"
     }
   ],
-  "functions": {
-    "src/api/*.py": {
-      "runtime": "vercel-python@4.0.0",
-      "excludeFiles": "{api/**,**/__pycache__/**}"
-    }
-  },
   "env": {
     "SUPABASE_URL": "@supabase_url",
     "SUPABASE_ANON_KEY": "@supabase_anon_key"
