@@ -1,51 +1,214 @@
-# キャッシュや一時ファイル
+# Python cache files and bytecode
 **/__pycache__/
 **/*.py[cod]
 **/*$py.class
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
+*.pyc
+*.pyo
+*.pyd
+.Python
 
-# 仮想環境
-.env
-.venv
-env/
+# Virtual environments
+.venv/
 venv/
+env/
 ENV/
+.env
 
-# ローカル開発用ファイル
-plots/
+# Package management
+uv.lock
+poetry.lock
+Pipfile.lock
+requirements.txt
+pyproject.toml
+
+# Machine learning models and data
 models/
-frontend_data/
-*.ipynb
-*.log
+*.pkl
+*.joblib
+*.h5
+*.model
+*.weights
 
-# Gitとバージョン管理
+# Data files
+data/
+*.csv
+*.xlsx
+*.json
+*.db
+*.sqlite3
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Analysis and visualization
+plots/
+frontend_data/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Large Python files (keep only API files)
+main.py
+ml_models.py
+data_analysis.py
+train_ml_models.py
+scheduler.py
+database.py
+start_server.py
+config.py
+clean_cache.py
+
+# Documentation and guides
+README.md
+*.md
+!FRONTEND_API_GUIDE.md
+
+# Test files
+api_test.html
+api_guide.md
+frontend_api_guide.md
+FRONTEND_INTEGRATION.md
+last_run.txt
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git files
 .git/
 .gitignore
-.github/
 
-# 開発中のデータ
+# Public directory (if not needed for API)
+public/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 全てのファイルを除外（APIとvercel.json以外）
+*
+!api/
+!vercel.json
+
+# APIディレクトリ内でも不要なファイルを除外
+api/__pycache__/
+api/*.pyc
+api/*.pyo
+api/*.pyd
+api/.DS_Store
+
+# 最重要: 大きな仮想環境ディレクトリを除外
+.venv
+.venv/
+venv
+venv/
+env
+env/
+ENV
+ENV/
+
+# Pythonキャッシュ
+__pycache__
+__pycache__/
+**/__pycache__
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+**/*.py[cod]
+**/*$py.class
+
+# 機械学習関連の大きなファイル
+models
+models/
+plots
+plots/
+data
+data/
+frontend_data
+frontend_data/
+*.pkl
+*.joblib
+*.h5
+*.model
+*.weights
+
+# パッケージ管理ファイル
+uv.lock
+poetry.lock
+Pipfile.lock
+requirements.txt
+pyproject.toml
+
+# 大きなPythonファイル
+main.py
+ml_models.py
+data_analysis.py
+train_ml_models.py
+scheduler.py
+config.py
+database.py
+start_server.py
+clean_cache.py
+
+# データファイル
 *.csv
 *.xlsx
 *.db
 *.sqlite3
-
-# ドキュメントと不要なマークダウン
-README.md
-FRONTEND_INTEGRATION.md
-frontend_api_guide.md
-*.md
-
-# テスト用ファイル
-test_*.py
-tests/
-
-# その他の大きなファイル
-*.lock
-*.toml
 *.json
 !vercel.json
-!package.json 
+
+# ドキュメント
+*.md
+README.md
+api_test.html
+api_guide.md
+frontend_api_guide.md
+FRONTEND_INTEGRATION.md
+last_run.txt
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints
+.ipynb_checkpoints/
+
+# IDE/OS
+.vscode
+.vscode/
+.idea
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+
+# 画像
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# その他
+public
+public/
+*.tmp
+*.temp
+*.log
+*.bak 
