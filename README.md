@@ -2,6 +2,9 @@
 
 This project provides real-time seating predictions using Supabase as a database and Vercel serverless functions for API delivery.
 
+<img width="709" alt="SS 2025-06-12 22 12 25" src="https://github.com/user-attachments/assets/83e1e09b-b468-4856-8872-507d85b7c419" />
+
+
 ## Project Overview
 
 The system consists of the following components:
@@ -146,6 +149,9 @@ The prediction flow is:
 3. Make predictions using the models
 4. Transform prediction results to user-friendly format
 5. Return JSON responses via API endpoints
+
+## frontend
+https://github.com/cmb-sy/real-time-seating-app
 
 ## License
 
