@@ -22,6 +22,20 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         """今日・明日の座席予測データを返す"""
         try:
+            # 現在の日時を取得
+            now = datetime.now()
+            today = now.date()
+            tomorrow = today + timedelta(days=1)
+            
+            # 平日チェック（月-金のみ対応）
+            if today.weekday() >= 5:  # 土日の場合
+                self.send_error_response("土日は営業していません。平日（月-金）のみ予測を提供しています。")
+                return
+            
+            if tomorrow.weekday() >= 5:  # 明日が土日の場合
+                # 今日のみの予測を提供
+                tomorrow = None
+            
             # Supabaseから実際のデータを取得
             historical_data = self.fetch_supabase_data()
             
@@ -29,36 +43,23 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error_response("Supabaseからデータを取得できませんでした。データベースにデータが存在しない可能性があります。")
                 return
             
-            # 現在の日時を取得
-            now = datetime.now()
-            today = now.date()
-            tomorrow = today + timedelta(days=1)
             current_hour = now.hour
             
             # 実データに基づく予測計算
             today_predictions = self.calculate_predictions_with_data(
                 historical_data, today, current_hour, is_today=True
             )
-            tomorrow_predictions = self.calculate_predictions_with_data(
-                historical_data, tomorrow, 9, is_today=False
-            )
             
-            # レスポンスデータ
+            # レスポンスデータの構築
             response_data = {
                 "success": True,
                 "timestamp": now.isoformat(),
                 "data": {
                     "today": {
                         "date": today.isoformat(),
-                        "day_of_week": ["月", "火", "水", "木", "金", "土", "日"][today.weekday()],
+                        "day_of_week": ["月", "火", "水", "木", "金"][today.weekday()],
                         "predictions": today_predictions,
                         "total_hours": len(today_predictions)
-                    },
-                    "tomorrow": {
-                        "date": tomorrow.isoformat(),
-                        "day_of_week": ["月", "火", "水", "木", "金", "土", "日"][tomorrow.weekday()],
-                        "predictions": tomorrow_predictions,
-                        "total_hours": len(tomorrow_predictions)
                     }
                 },
                 "metadata": {
@@ -66,9 +67,31 @@ class handler(BaseHTTPRequestHandler):
                     "last_updated": now.isoformat(),
                     "confidence": "high",
                     "data_source": "supabase_historical_data",
-                    "historical_records_used": len(historical_data)
+                    "historical_records_used": len(historical_data),
+                    "weekday_only": True
                 }
             }
+            
+            # 明日が平日の場合のみ明日の予測を追加
+            if tomorrow is not None:
+                tomorrow_predictions = self.calculate_predictions_with_data(
+                    historical_data, tomorrow, 9, is_today=False
+                )
+                
+                response_data["data"]["tomorrow"] = {
+                    "date": tomorrow.isoformat(),
+                    "day_of_week": ["月", "火", "水", "木", "金"][tomorrow.weekday()],
+                    "predictions": tomorrow_predictions,
+                    "total_hours": len(tomorrow_predictions)
+                }
+            else:
+                response_data["data"]["tomorrow"] = {
+                    "date": None,
+                    "day_of_week": None,
+                    "predictions": [],
+                    "total_hours": 0,
+                    "message": "明日は土日のため営業していません"
+                }
             
             self.send_success_response(response_data)
             
@@ -143,16 +166,21 @@ class handler(BaseHTTPRequestHandler):
             raise Exception(f"Supabaseデータ取得エラー: {str(e)}")
     
     def calculate_predictions_with_data(self, historical_data, target_date, start_hour, is_today=True):
-        """実データに基づく予測計算"""
+        """実データに基づく予測計算（平日のみ）"""
         predictions = []
         weekday = target_date.weekday()
         
-        # 同じ曜日の履歴データを抽出
+        # 平日チェック
+        if weekday >= 5:
+            return []  # 土日の場合は空の予測を返す
+        
+        # 同じ曜日の履歴データを抽出（平日のみ）
         same_weekday_data = []
         for record in historical_data:
             try:
                 record_date = datetime.fromisoformat(record['created_at'].replace('Z', '+00:00')).date()
-                if record_date.weekday() == weekday:
+                # 平日のデータのみを対象とし、同じ曜日のデータを抽出
+                if record_date.weekday() == weekday and record_date.weekday() < 5:
                     same_weekday_data.append(record)
             except:
                 continue

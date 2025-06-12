@@ -41,6 +41,12 @@ class handler(BaseHTTPRequestHandler):
                     "supabase_sync": "/supabase/sync または /api/supabase/sync"
                 },
                 "data_source": "supabase_only",
+                "business_hours": {
+                    "weekdays_only": True,
+                    "operating_days": "月曜日-金曜日",
+                    "operating_hours": "9:00-18:00",
+                    "weekend_status": "休業"
+                },
                 "configuration": {
                     "supabase_url_configured": bool(os.getenv('SUPABASE_URL')),
                     "supabase_key_configured": bool(os.getenv('SUPABASE_ANON_KEY'))

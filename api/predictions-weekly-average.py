@@ -125,11 +125,12 @@ class handler(BaseHTTPRequestHandler):
             raise Exception(f"Supabaseデータ取得エラー: {str(e)}")
     
     def calculate_weekly_averages_with_data(self, historical_data):
-        """実データに基づく週間平均計算"""
-        weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
+        """実データに基づく週間平均計算（平日のみ）"""
+        weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
         weekly_averages = []
         
-        for weekday in range(7):
+        # 平日のみ（0-4: 月曜日から金曜日）
+        for weekday in range(5):
             # 該当曜日のデータを抽出
             weekday_data = []
             for record in historical_data:
@@ -220,14 +221,14 @@ class handler(BaseHTTPRequestHandler):
         return weekly_averages
     
     def get_weekly_summary(self, weekly_averages):
-        """週間サマリーを生成"""
+        """週間サマリーを生成（平日のみ）"""
         # データがある曜日のみを対象
         valid_days = [day for day in weekly_averages if day['daily_average_occupancy'] is not None]
         
         if not valid_days:
             return {
-                "error": "週間データが不足しています",
-                "message": "各曜日のデータを蓄積してから再度お試しください",
+                "error": "平日データが不足しています",
+                "message": "平日（月-金）のデータを蓄積してから再度お試しください",
                 "total_valid_days": 0
             }
         
@@ -284,6 +285,7 @@ class handler(BaseHTTPRequestHandler):
             "data_quality": {
                 "total_valid_days": len(valid_days),
                 "total_days_analyzed": len(weekly_averages),
-                "data_coverage": f"{len(valid_days)}/7曜日"
+                "data_coverage": f"{len(valid_days)}/5平日",
+                "weekday_only": True
             }
         } 
