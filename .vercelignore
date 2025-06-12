@@ -18,16 +18,15 @@ ENV/
 uv.lock
 poetry.lock
 Pipfile.lock
-requirements.txt
-pyproject.toml
 
-# Machine learning models and data
-models/
-*.pkl
-*.joblib
-*.h5
-*.model
-*.weights
+# 大きなモデルファイル（必要なものは含める）
+# モデルファイルは含める必要があります！
+# models/
+# *.pkl
+# *.joblib
+# *.h5
+# *.model
+# *.weights
 
 # Data files
 data/
@@ -99,12 +98,15 @@ public/
 Thumbs.db
 desktop.ini
 
-# 全てのファイルを除外（APIとSRC/APIとvercel.json以外）
-*
-!api/
-!src/
-!src/api/
-!vercel.json
+# APIとSRC/APIとvercel.json、モデル、設定ファイルは含める
+# *
+# !api/
+# !src/
+# !src/api/
+# !src/models/
+# !vercel.json
+# !requirements.txt
+# !pyproject.toml
 
 # APIディレクトリ内でも不要なファイルを除外
 api/__pycache__/
@@ -134,38 +136,38 @@ __pycache__/
 **/*.py[cod]
 **/*$py.class
 
-# 機械学習関連の大きなファイル
-models
-models/
+# 機械学習関連の大きなファイル（必要なものは含める）
+# models
+# models/
 plots
 plots/
 data
 data/
 frontend_data
 frontend_data/
-*.pkl
-*.joblib
-*.h5
-*.model
-*.weights
+# *.pkl
+# *.joblib
+# *.h5
+# *.model
+# *.weights
 
 # パッケージ管理ファイル
 uv.lock
 poetry.lock
 Pipfile.lock
-requirements.txt
-pyproject.toml
+# requirements.txt
+# pyproject.toml
 
-# 大きなPythonファイル
-main.py
-ml_models.py
-data_analysis.py
-train_ml_models.py
-scheduler.py
-config.py
-database.py
-start_server.py
-clean_cache.py
+# 不要なPythonファイル
+# main.py
+# ml_models.py
+# data_analysis.py
+# train_ml_models.py
+# scheduler.py
+# config.py
+# database.py
+# start_server.py
+# clean_cache.py
 
 # データファイル
 *.csv

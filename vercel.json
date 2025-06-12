@@ -25,14 +25,6 @@
       "destination": "/src/api/predictions_weekly_average"
     },
     {
-      "source": "/predictions/ml",
-      "destination": "/src/api/ml_predictions"
-    },
-    {
-      "source": "/api/predictions/ml",
-      "destination": "/src/api/ml_predictions"
-    },
-    {
       "source": "/supabase/sync",
       "destination": "/src/api/supabase_sync"
     },
@@ -47,10 +39,6 @@
       "excludeFiles": "{api/**,**/__pycache__/**}"
     }
   },
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/src/api/$1" },
-    { "src": "/(.*)", "dest": "/src/api/$1" }
-  ],
   "env": {
     "SUPABASE_URL": "@supabase_url",
     "SUPABASE_ANON_KEY": "@supabase_anon_key"
