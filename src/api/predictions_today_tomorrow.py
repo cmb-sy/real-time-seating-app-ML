@@ -85,7 +85,7 @@ class handler(BaseHTTPRequestHandler):
                 
                 for weekday in range(5):  # 月〜金
                     prediction = self.predict_with_ml_model(model_data, weekday)
-                    weekday_name = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"][weekday]
+                    weekday_name = ["月曜", "火曜", "水曜", "木曜", "金曜"][weekday]
                     
                     daily_predictions[weekday_name] = {
                         "レコード数": 55,  # 訓練データ数（固定）

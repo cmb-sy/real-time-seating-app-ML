@@ -186,7 +186,7 @@ class handler(BaseHTTPRequestHandler):
     
     def calculate_weekly_averages_with_ml(self, model_data):
         """機械学習モデルを使用した週間平均計算（平日のみ）"""
-        weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
+        weekday_names = ["月曜", "火曜", "水曜", "木曜", "金曜"]
         weekly_averages = []
         
         # パフォーマンス情報
