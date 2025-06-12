@@ -1,57 +1,58 @@
 {
   "version": 2,
-  "buildCommand": "chmod +x install_minimal.sh && ./install_minimal.sh",
-  "outputDirectory": ".vercel/output",
-  "functions": {
-    "api/*.py": {
-      "memory": 1024,
-      "maxDuration": 10
+  "builds": [
+    {
+      "src": "src/api/*.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "10mb"
+      }
     }
-  },
+  ],
   "routes": [
     {
       "src": "/",
-      "dest": "functions/index.py"
+      "dest": "src/api/index.py"
     },
     {
       "src": "/health",
-      "dest": "functions/health.py"
+      "dest": "src/api/health.py"
     },
     {
       "src": "/api/health",
-      "dest": "functions/health.py"
+      "dest": "src/api/health.py"
     },
     {
       "src": "/predictions/today-tomorrow",
-      "dest": "functions/predictions_today_tomorrow.py"
+      "dest": "src/api/predictions_today_tomorrow.py"
     },
     {
       "src": "/api/predictions/today-tomorrow",
-      "dest": "functions/predictions_today_tomorrow.py"
+      "dest": "src/api/predictions_today_tomorrow.py"
     },
     {
       "src": "/predictions/weekly-average",
-      "dest": "functions/predictions_weekly_average.py"
+      "dest": "src/api/predictions_weekly_average.py"
     },
     {
       "src": "/api/predictions/weekly-average",
-      "dest": "functions/predictions_weekly_average.py"
+      "dest": "src/api/predictions_weekly_average.py"
     },
     {
       "src": "/supabase/sync",
-      "dest": "functions/supabase_sync.py"
+      "dest": "src/api/supabase_sync.py"
     },
     {
       "src": "/api/supabase/sync",
-      "dest": "functions/supabase_sync.py"
+      "dest": "src/api/supabase_sync.py"
     },
     {
       "src": "/ml/predict",
-      "dest": "functions/predictions_today_tomorrow.py"
+      "dest": "src/api/predictions_today_tomorrow.py"
     },
     {
       "src": "/analysis/weekday_analysis",
-      "dest": "functions/predictions_today_tomorrow.py"
+      "dest": "src/api/predictions_today_tomorrow.py"
     }
   ]
 }
