@@ -1,64 +1,75 @@
-# リアルタイム座席予測アプリケーション（ML 版）
+# Real-time Seating Prediction Application (ML Version)
 
-リアルタイム座席予測アプリケーションにおいて、Supabase をデータベースとして使用し、Vercel サーバーレス関数で API を提供します。
+This project provides real-time seating predictions using Supabase as a database and Vercel serverless functions for API delivery.
 
-## プロジェクト概要
+## Project Overview
 
-このプロジェクトは以下のコンポーネントで構成されています：
+The system consists of the following components:
 
-1. **機械学習モデル** - scikit-learn と Optuna を使用した予測モデル
-2. **データ分析ツール** - 過去データの分析と可視化
-3. **API エンドポイント** - Vercel サーバーレス関数で実装
-4. **定期実行スケジューラー** - 2 週間ごとにモデルを更新
+1. **Machine Learning Model** - Prediction model using scikit-learn and Optuna
+2. **Data Analysis Tools** - Analysis and visualization of historical data
+3. **API Endpoints** - Implemented as Vercel serverless functions
+4. **Scheduler** - Updates models every two weeks
 
-## 機能
+## Features
 
-- 密度率と占有座席数の予測
-- 曜日・時間帯ごとの利用パターン分析
-- リアルタイム API エンドポイント（今日・明日の予測）
-- 機械学習モデルによる曜日別予測
-- 週間平均予測データの提供
-- Optuna によるハイパーパラメータ最適化
-- データ可視化ツール
+- Density rate and occupied seat prediction
+- Day-of-week usage pattern analysis
+- Real-time API endpoints (today and tomorrow predictions)
+- Machine learning predictions by day of week
+- Weekly average prediction data
+- Hyperparameter optimization with Optuna
+- Data visualization tools
 
-## 環境設定
+## Technical Architecture
 
-### 前提条件
+The project uses a gradient boosting model to predict seating density and occupancy based on the day of the week. The model is trained on historical data and deployed as serverless functions on Vercel, which provide JSON API endpoints for frontend consumption.
 
-- Python 3.10 以上
-- Supabase アカウントと API 情報
+Key technical components:
 
-### インストール手順
+- **Machine Learning**: Gradient Boosting Regressor models from scikit-learn
+- **Backend**: Python serverless functions
+- **Deployment**: Vercel serverless environment
+- **Database**: Supabase
 
-1. リポジトリのクローン:
+## Environment Setup
+
+### Prerequisites
+
+- Python 3.10 or higher
+- Supabase account and API information
+
+### Installation
+
+1. Clone the repository:
 
 ```bash
 git clone https://github.com/yourusername/real-time-seating-app-ML.git
 cd real-time-seating-app-ML
 ```
 
-2. 仮想環境の作成と有効化:
+2. Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
-3. 依存関係のインストール:
+3. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-4. プロジェクトのパスを追加:
+4. Add project path:
 
 ```bash
 pip install -e .
 ```
 
-4. 環境変数の設定:
+5. Set environment variables:
 
-プロジェクトルートに`.env`ファイルを作成し、以下の内容を設定します：
+Create a `.env` file in the project root with the following content:
 
 ```
 SUPABASE_URL=https://your-supabase-project.supabase.co
@@ -66,94 +77,76 @@ SUPABASE_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_KEY=your-supabase-service-key
 ```
 
-## 使用方法
+## Usage
 
-### メインコマンド
+### Main Commands
 
 ```bash
-python main.py train     # 機械学習モデルの訓練
-python main.py analyze   # データ分析の実行
-python main.py schedule  # スケジューラーの実行
+python main.py train     # Train machine learning models
+python main.py analyze   # Run data analysis
+python main.py schedule  # Execute scheduler
 ```
 
-### 機械学習モデルの訓練（詳細オプション）
+### Training Machine Learning Models (Detailed Options)
 
 ```bash
 python -m src.ml.train_ml_models --mode train --n-trials 50
 ```
 
-オプション:
+Options:
 
-- `--mode`: 実行モード（train: 訓練, test: 予測テスト, info: モデル情報表示）
-- `--n-trials`: Optuna の最適化試行回数（デフォルト: 50）
-- `--target`: 最適化対象（density: 密度率, seats: 座席数, both: 両方）
+- `--mode`: Execution mode (train, test, info)
+- `--n-trials`: Number of Optuna optimization trials (default: 50)
+- `--target`: Optimization target (density, seats, both)
 
-### 予測テストの実行
+### Testing Predictions
 
 ```bash
 python -m src.ml.train_ml_models --mode test
 ```
 
-### モデル情報の表示
-
-```bash
-python -m src.ml.train_ml_models --mode info
-```
-
-### API サーバーのローカル実行
+### Running API Server Locally
 
 ```bash
 uvicorn src.api.health:app --reload --port 8000
 ```
 
-## モデルの更新
+## Deployment
 
-モデルは 2 週間ごとに自動的に更新されるようスケジュールされています。手動でモデルを更新する場合は以下のコマンドを実行します：
+The application is deployed on Vercel, with pre-trained models stored in the same directory as API code. For deployment:
 
-```bash
-python -m src.utils.scheduler --mode force
-```
-
-継続的な監視モードで実行するには：
+1. Copy model files to the API directory:
 
 ```bash
-python -m src.utils.scheduler --mode monitor
+./copy_models.sh
 ```
 
-## API エンドポイント
+2. Push to GitHub for automatic deployment via Vercel integration.
 
-本番環境では、以下の Vercel サーバーレス関数エンドポイントが利用可能です：
+## API Endpoints
 
-- `/api/health` - システムの状態確認
-- `/api/predictions/today-tomorrow` - 今日と明日の予測（履歴データに基づく）
-- `/api/predictions/weekly-average` - 週間平均予測
-- `/api/predictions/ml` - 機械学習モデルによる曜日別予測
-- `/api/supabase/sync` - Supabase データベース同期
+The following Vercel serverless function endpoints are available:
 
-### 機械学習予測 API
+- `/health` - System health check
+- `/predictions/today-tomorrow` - Today and tomorrow predictions
+- `/predictions/weekly-average` - Weekly average predictions
+- `/ml/predict` - Machine learning predictions by specific day
+- `/analysis/weekday_analysis` - Day-by-day analysis data
 
-`/api/predictions/ml` エンドポイントは、訓練済みの機械学習モデルを使用して曜日別の予測を提供します：
+See the [API_ENDPOINTS.md](API_ENDPOINTS.md) file for detailed API documentation.
 
-- **入力**: なし（リクエスト日の曜日を自動検出）
-- **出力**:
-  - 今日と明日の密度率予測
-  - 占有座席数予測
-  - 予測の信頼度
-  - モデルのパフォーマンス指標（RMSE）
-  - モデルタイプ
+## Implementation Details
 
-このエンドポイントは、時間特徴量を除去し、曜日のみを特徴量として使用した予測モデルを活用しています。
+The system uses pre-trained gradient boosting models to make predictions based solely on the day of the week feature. The API returns both raw model outputs (density rate and occupied seats) and processed data (occupancy rate, status, etc.) suitable for frontend display.
 
-### Vercel デプロイについて
+The prediction flow is:
 
-Vercel では`vercel.json`の設定により、`src/api`ディレクトリの API ファイルを直接使用するように構成されています：
+1. Load trained models from .joblib files
+2. Extract day of week (0-4) as the feature
+3. Make predictions using the models
+4. Transform prediction results to user-friendly format
+5. Return JSON responses via API endpoints
 
-1. リクエストルーティング - すべての API リクエストが`src/api`ディレクトリのファイルに転送されます
-2. 関数設定 - `src/api/*.py`が実行可能な Python 関数として設定されています
-3. 無視ルール - `.vercelignore`ファイルで`src/api`ディレクトリが保護されています
+## License
 
-この設定により、開発時の構造化されたディレクトリ構成をそのまま Vercel にデプロイできます。
-
-## ライセンス
-
-このプロジェクトは MIT ライセンスの下で公開されています。
+This project is released under the MIT license.
