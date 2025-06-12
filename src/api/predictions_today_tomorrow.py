@@ -52,7 +52,7 @@ class handler(BaseHTTPRequestHandler):
             
             # 今日の予測
             today_weekday = today.weekday()  # 0: 月曜日, 1: 火曜日, ..., 4: 金曜日
-            today_prediction = self.generate_hourly_predictions_with_ml(model_data, today_weekday, 0, is_today=True)
+            today_prediction = self.generate_hourly_predictions_with_ml(model_data, today_weekday)
             
             # URLパスからAPIを判断
             path = self.path
@@ -139,7 +139,7 @@ class handler(BaseHTTPRequestHandler):
                 # 明日が平日の場合のみ明日の予測を追加
                 if tomorrow is not None:
                     tomorrow_weekday = tomorrow.weekday()
-                    tomorrow_prediction = self.generate_hourly_predictions_with_ml(model_data, tomorrow_weekday, 0, is_today=False)
+                    tomorrow_prediction = self.generate_hourly_predictions_with_ml(model_data, tomorrow_weekday)
                     
                     response_data["data"]["tomorrow"] = {
                         "date": tomorrow.isoformat(),
@@ -188,21 +188,31 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(error_data, ensure_ascii=False).encode('utf-8'))
     
     def load_ml_models(self):
-        """機械学習モデルをロード"""
+        """機械学習モデルをロード（軽量版）"""
         try:
             # モデルファイルのパス
-            base_dir = Path(__file__).resolve().parent.parent
-            models_dir = base_dir / "models"
+            # 現在のファイルと同じディレクトリにモデルがある前提
+            current_dir = Path(__file__).resolve().parent
             
             # 必要なモデルファイル
-            density_model_path = models_dir / "density_model.joblib"
-            seats_model_path = models_dir / "seats_model.joblib"
-            best_params_path = models_dir / "best_params.joblib"
-            model_performance_path = models_dir / "model_performance.joblib"
+            density_model_path = current_dir / "density_model.joblib"
+            seats_model_path = current_dir / "seats_model.joblib"
+            best_params_path = current_dir / "best_params.joblib"
+            model_performance_path = current_dir / "model_performance.joblib"
             
             # ファイルの存在確認
             if not all(f.exists() for f in [density_model_path, seats_model_path, best_params_path, model_performance_path]):
-                return None
+                # 従来のパスで試す
+                base_dir = Path(__file__).resolve().parent.parent
+                models_dir = base_dir / "models"
+                
+                density_model_path = models_dir / "density_model.joblib"
+                seats_model_path = models_dir / "seats_model.joblib"
+                best_params_path = models_dir / "best_params.joblib"
+                model_performance_path = models_dir / "model_performance.joblib"
+                
+                if not all(f.exists() for f in [density_model_path, seats_model_path, best_params_path, model_performance_path]):
+                    return None
             
             # モデルのロード
             density_model = joblib.load(density_model_path)
@@ -222,34 +232,28 @@ class handler(BaseHTTPRequestHandler):
             return None
     
     def predict_with_ml_model(self, model_data, day_of_week):
-        """MLモデルで予測を実行"""
-        try:
-            # 特徴量として曜日のみを使用
-            features = np.array([[day_of_week]])
+        """MLモデルで予測を実行（シンプル版）"""
+        # 特徴量として曜日のみを使用
+        features = np.array([[day_of_week]])
+        
+        # 密度率と座席数の予測
+        density_model = model_data.get("density_model")
+        seats_model = model_data.get("seats_model")
+        
+        if density_model and seats_model:
+            # predict関数を直接呼び出し
+            density_pred = density_model.predict(features)[0]
+            seats_pred = seats_model.predict(features)[0]
             
-            # 密度率と座席数の予測
-            density_model = model_data.get("density_model")
-            seats_model = model_data.get("seats_model")
+            # 予測値を適切な範囲に調整
+            density_pred = max(0, min(100, density_pred))
+            seats_pred = max(0, min(int(seats_pred), 100))
             
-            if density_model and seats_model:
-                density_pred = density_model.predict(features)[0]
-                seats_pred = seats_model.predict(features)[0]
-                
-                # 予測値を適切な範囲に調整
-                density_pred = max(0, min(100, density_pred))
-                seats_pred = max(0, min(int(seats_pred), 100))
-                
-                return {
-                    "density_rate": round(density_pred, 2),
-                    "occupied_seats": int(seats_pred)
-                }
-            else:
-                return {
-                    "density_rate": None,
-                    "occupied_seats": None
-                }
-        except Exception as e:
-            print(f"予測エラー: {str(e)}")
+            return {
+                "density_rate": round(density_pred, 2),
+                "occupied_seats": int(seats_pred)
+            }
+        else:
             return {
                 "density_rate": None,
                 "occupied_seats": None
@@ -274,11 +278,9 @@ class handler(BaseHTTPRequestHandler):
         except:
             return "medium"
     
-    def generate_hourly_predictions_with_ml(self, model_data, day_of_week, start_hour, is_today=True):
-        """曜日別の予測を生成（機械学習モデル使用）"""
-        # 基本の予測値（曜日ベース）を取得
+    def generate_hourly_predictions_with_ml(self, model_data, day_of_week):
+        """曜日別の予測を生成"""
         base_prediction = self.predict_with_ml_model(model_data, day_of_week)
-        
         if base_prediction["density_rate"] is None or base_prediction["occupied_seats"] is None:
             # 予測エラーの場合
             return {

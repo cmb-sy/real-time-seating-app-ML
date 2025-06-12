@@ -1,59 +1,57 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "src/api/*.py",
-      "use": "@vercel/python",
-      "config": {
-        "runtime": "python3.12",
-        "maxLambdaSize": "15mb"
-      }
+  "buildCommand": "chmod +x install_minimal.sh && ./install_minimal.sh",
+  "outputDirectory": ".vercel/output",
+  "functions": {
+    "api/*.py": {
+      "memory": 1024,
+      "maxDuration": 10
     }
-  ],
+  },
   "routes": [
     {
       "src": "/",
-      "dest": "src/api/index.py"
+      "dest": "functions/index.py"
     },
     {
       "src": "/health",
-      "dest": "src/api/health.py"
+      "dest": "functions/health.py"
     },
     {
       "src": "/api/health",
-      "dest": "src/api/health.py"
+      "dest": "functions/health.py"
     },
     {
       "src": "/predictions/today-tomorrow",
-      "dest": "src/api/predictions_today_tomorrow.py"
+      "dest": "functions/predictions_today_tomorrow.py"
     },
     {
       "src": "/api/predictions/today-tomorrow",
-      "dest": "src/api/predictions_today_tomorrow.py"
+      "dest": "functions/predictions_today_tomorrow.py"
     },
     {
       "src": "/predictions/weekly-average",
-      "dest": "src/api/predictions_weekly_average.py"
+      "dest": "functions/predictions_weekly_average.py"
     },
     {
       "src": "/api/predictions/weekly-average",
-      "dest": "src/api/predictions_weekly_average.py"
+      "dest": "functions/predictions_weekly_average.py"
     },
     {
       "src": "/supabase/sync",
-      "dest": "src/api/supabase_sync.py"
+      "dest": "functions/supabase_sync.py"
     },
     {
       "src": "/api/supabase/sync",
-      "dest": "src/api/supabase_sync.py"
+      "dest": "functions/supabase_sync.py"
     },
     {
       "src": "/ml/predict",
-      "dest": "src/api/predictions_today_tomorrow.py"
+      "dest": "functions/predictions_today_tomorrow.py"
     },
     {
       "src": "/analysis/weekday_analysis",
-      "dest": "src/api/predictions_today_tomorrow.py"
+      "dest": "functions/predictions_today_tomorrow.py"
     }
   ]
 }
