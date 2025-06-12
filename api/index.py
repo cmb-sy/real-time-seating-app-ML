@@ -1,11 +1,11 @@
 """
 Vercel Serverless Function エントリーポイント
-up簡略化バージョン - Vercelのサイズ制限に対応
+簡略化バージョン - Vercelのサイズ制限に対応
 """
 import sys
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
@@ -32,6 +32,7 @@ def get_cors_origins():
         "http://127.0.0.1:3000",
         "https://v0-real-time-seating-app.vercel.app",
         "https://real-time-seating-app-ml.vercel.app",
+        "*"  # すべてのオリジンを許可（テスト用）
     ]
 
 app.add_middleware(
@@ -48,21 +49,37 @@ app.add_middleware(
     max_age=3600,
 )
 
+# 明示的なCORSヘッダー追加ミドルウェア
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Origin"
+    return response
+
 @app.get("/")
 @app.options("/")
 async def root():
     """ルートエンドポイント - APIの動作確認用"""
     return {"message": "Real-time Seating App ML API is running (simplified version)!"}
 
+@app.get("/api")
+@app.options("/api")
+async def api_root():
+    """APIルートエンドポイント"""
+    return {"message": "Real-time Seating App ML API is running (simplified version)!"}
+
+# OPTIONSリクエスト対応
 @app.options("/{rest_of_path:path}")
 async def preflight_handler(rest_of_path: str):
     """プレフライトリクエスト(OPTIONS)のためのハンドラー"""
     return {}
 
+# ヘルスチェックエンドポイント（複数のパスで対応）
 @app.get("/health")
+@app.get("/api/health")
 @app.get("/api/health-check")
-@app.options("/health")
-@app.options("/api/health-check")
 async def health_check():
     """ヘルスチェックエンドポイント"""
     try:
@@ -72,7 +89,8 @@ async def health_check():
             "models_loaded": False,
             "available_models": [],
             "environment": "production-lite",
-            "message": "簡略化されたAPIが正常に動作しています"
+            "message": "簡略化されたAPIが正常に動作しています",
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
@@ -88,8 +106,6 @@ async def health_check():
 async def get_today_tomorrow_predictions():
     """今日と明日の予測データを取得 (ダミーデータ)"""
     try:
-        from datetime import datetime
-        
         # 現在の曜日を取得（0=月曜日）
         today_weekday = datetime.now().weekday()
         tomorrow_weekday = (today_weekday + 1) % 7
