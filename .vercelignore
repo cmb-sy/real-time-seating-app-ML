@@ -99,9 +99,11 @@ public/
 Thumbs.db
 desktop.ini
 
-# 全てのファイルを除外（APIとvercel.json以外）
+# 全てのファイルを除外（APIとSRC/APIとvercel.json以外）
 *
 !api/
+!src/
+!src/api/
 !vercel.json
 
 # APIディレクトリ内でも不要なファイルを除外

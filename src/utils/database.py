@@ -3,7 +3,7 @@ Supabaseデータベース接続モジュール
 """
 
 from supabase import create_client, Client
-from config import SUPABASE_URL, SUPABASE_KEY
+from src.utils.config import SUPABASE_URL, SUPABASE_KEY
 
 def get_supabase_client() -> Client:
     """

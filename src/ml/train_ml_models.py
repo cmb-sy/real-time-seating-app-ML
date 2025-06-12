@@ -5,8 +5,8 @@
 
 import logging
 import argparse
-from ml_models import MLPredictor
-from data_analysis import DataAnalyzer
+from src.ml.ml_models import MLPredictor
+from src.ml.data_analysis import DataAnalyzer
 
 # ログ設定
 logging.basicConfig(
@@ -97,12 +97,12 @@ def run_full_ml_pipeline(n_trials: int = 50, target_type: str = 'both'):
     logger.info("3. 予測テストを実行中...")
     
     try:
-        # 各曜日の12時の予測をテスト
+        # 各曜日の予測をテスト
         weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
         
         for day in range(0, 5):
-            predictions = predictor.predict(day_of_week=day, hour=12)
-            logger.info(f"{weekday_names[day]} 12時の予測: {predictions}")
+            predictions = predictor.predict(day_of_week=day)
+            logger.info(f"{weekday_names[day]}の予測: {predictions}")
         
     except Exception as e:
         logger.error(f"予測テストエラー: {e}")
@@ -126,20 +126,18 @@ def test_predictions():
     
     logger.info("保存済みモデルを読み込みました")
     
-    # 各曜日の代表的な時間での予測
+    # 各曜日での予測
     weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
-    test_hours = [9, 12, 15, 18]  # 9時、12時、15時、18時
     
     for day in range(0, 5):
         logger.info(f"\n--- {weekday_names[day]} ---")
-        for hour in test_hours:
-            try:
-                predictions = predictor.predict(day_of_week=day, hour=hour)
-                density = predictions.get('density_rate', 'N/A')
-                seats = predictions.get('occupied_seats', 'N/A')
-                logger.info(f"{hour:2d}時: 密度率 {density}%, 占有座席数 {seats}")
-            except Exception as e:
-                logger.error(f"{hour}時の予測エラー: {e}")
+        try:
+            predictions = predictor.predict(day_of_week=day)
+            density = predictions.get('density_rate', 'N/A')
+            seats = predictions.get('occupied_seats', 'N/A')
+            logger.info(f"密度率 {density}%, 占有座席数 {seats}")
+        except Exception as e:
+            logger.error(f"予測エラー: {e}")
     
     logger.info("=== 予測テスト完了 ===")
     return True

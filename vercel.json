@@ -1,0 +1,58 @@
+{
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/src/api/health"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/src/api/health"
+    },
+    {
+      "source": "/predictions/today-tomorrow",
+      "destination": "/src/api/predictions_today_tomorrow"
+    },
+    {
+      "source": "/api/predictions/today-tomorrow",
+      "destination": "/src/api/predictions_today_tomorrow"
+    },
+    {
+      "source": "/predictions/weekly-average",
+      "destination": "/src/api/predictions_weekly_average"
+    },
+    {
+      "source": "/api/predictions/weekly-average",
+      "destination": "/src/api/predictions_weekly_average"
+    },
+    {
+      "source": "/predictions/ml",
+      "destination": "/src/api/ml_predictions"
+    },
+    {
+      "source": "/api/predictions/ml",
+      "destination": "/src/api/ml_predictions"
+    },
+    {
+      "source": "/supabase/sync",
+      "destination": "/src/api/supabase_sync"
+    },
+    {
+      "source": "/api/supabase/sync",
+      "destination": "/src/api/supabase_sync"
+    }
+  ],
+  "functions": {
+    "src/api/*.py": {
+      "runtime": "vercel-python@4.0.0",
+      "excludeFiles": "{api/**,**/__pycache__/**}"
+    }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/src/api/$1" },
+    { "src": "/(.*)", "dest": "/src/api/$1" }
+  ],
+  "env": {
+    "SUPABASE_URL": "@supabase_url",
+    "SUPABASE_ANON_KEY": "@supabase_anon_key"
+  }
+}

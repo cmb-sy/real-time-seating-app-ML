@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple
 import logging
 import sys
 from supabase import create_client
-import config
+from src.utils import config
 
 # 日本語フォントの設定
 plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', 'sans-serif']
@@ -422,12 +422,12 @@ class DataAnalyzer:
         
         return monthly_averages
     
-    def prepare_ml_data(self) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
+    def prepare_ml_data(self) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray]:
         """
-        機械学習用のデータを準備
+        機械学習用のデータを準備（時間特徴量なし）
         
         Returns:
-            Tuple[pd.DataFrame, np.ndarray, np.ndarray]: (全データ, 特徴量, 目的変数)
+            Tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray]: (全データ, 特徴量, 密度率目的変数, 座席数目的変数)
         """
         if self.df is None:
             self.load_data_from_supabase()
@@ -435,21 +435,13 @@ class DataAnalyzer:
         # 平日データのみを使用
         ml_data = self.df_weekdays.copy()
         
-        # 特徴量エンジニアリング
-        ml_data['hour'] = ml_data['created_at'].dt.hour
-        ml_data['day_of_week_sin'] = np.sin(2 * np.pi * ml_data['day_of_week'] / 7)
-        ml_data['day_of_week_cos'] = np.cos(2 * np.pi * ml_data['day_of_week'] / 7)
-        ml_data['hour_sin'] = np.sin(2 * np.pi * ml_data['hour'] / 24)
-        ml_data['hour_cos'] = np.cos(2 * np.pi * ml_data['hour'] / 24)
-        
-        # 特徴量とターゲットを分離
-        feature_cols = ['day_of_week', 'hour', 'day_of_week_sin', 'day_of_week_cos', 
-                       'hour_sin', 'hour_cos']
+        # 特徴量：曜日のみ使用（時間特徴量は除去）
+        feature_cols = ['day_of_week']
         
         X = ml_data[feature_cols].values
         y_density = ml_data['density_rate'].values
         y_seats = ml_data['occupied_seats'].values
         
-        logger.info(f"機械学習用データ準備完了: 特徴量 {X.shape}, 密度率目的変数 {y_density.shape}, 座席数目的変数 {y_seats.shape}")
+        logger.info(f"機械学習用データ準備完了（時間特徴量なし）: 特徴量 {X.shape}, 密度率目的変数 {y_density.shape}, 座席数目的変数 {y_seats.shape}")
         
         return ml_data, X, y_density, y_seats 

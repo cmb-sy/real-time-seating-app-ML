@@ -1,6 +1,5 @@
 """
 ヘルスチェック用の専用Vercelサーバーレス関数
-Supabaseデータベース接続テスト付き
 """
 import json
 import urllib.request
@@ -85,65 +84,6 @@ class handler(BaseHTTPRequestHandler):
         }
         
         self.wfile.write(json.dumps(error_data, ensure_ascii=False).encode('utf-8'))
-    
-    def test_supabase_connection(self):
-        """Supabaseデータベース接続をテスト"""
-        try:
-            # 環境変数の確認
-            supabase_url = os.getenv('SUPABASE_URL')
-            supabase_key = os.getenv('SUPABASE_ANON_KEY')
-            
-            if not supabase_url or not supabase_key:
-                return False, {
-                    "status": "disconnected",
-                    "error": "環境変数が設定されていません",
-                    "missing_vars": [
-                        var for var in ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] 
-                        if not os.getenv(var)
-                    ]
-                }
-            
-            # Supabase REST API呼び出し（テスト用）
-            url = f"{supabase_url}/rest/v1/density_history"
-            params = {
-                'select': 'count',
-                'limit': '1'
-            }
-            
-            query_string = urllib.parse.urlencode(params)
-            full_url = f"{url}?{query_string}"
-            
-            req = urllib.request.Request(full_url)
-            req.add_header('apikey', supabase_key)
-            req.add_header('Authorization', f'Bearer {supabase_key}')
-            req.add_header('Content-Type', 'application/json')
-            
-            with urllib.request.urlopen(req, timeout=5) as response:
-                if response.status == 200:
-                    # データ件数の取得
-                    data_count = self.get_data_count(supabase_url, supabase_key)
-                    
-                    return True, {
-                        "status": "connected",
-                        "url": supabase_url,
-                        "table": "density_history",
-                        "total_records": data_count,
-                        "last_checked": datetime.now().isoformat(),
-                        "connection_test": "success"
-                    }
-                else:
-                    return False, {
-                        "status": "disconnected",
-                        "error": f"HTTP {response.status}",
-                        "url": supabase_url
-                    }
-                    
-        except Exception as e:
-            return False, {
-                "status": "disconnected",
-                "error": str(e),
-                "url": supabase_url if 'supabase_url' in locals() else "未設定"
-            }
     
     def get_data_count(self, supabase_url, supabase_key):
         """データ件数を取得"""

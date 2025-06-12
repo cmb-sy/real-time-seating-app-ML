@@ -162,9 +162,7 @@ cython_debug/
 .vscode/
 
 # 機械学習関連
-models/
 *.pkl
-*.joblib
 *.h5
 *.model
 optuna_studies/
@@ -173,7 +171,6 @@ mlruns/
 # データファイル
 data/
 *.csv
-*.json
 *.parquet
 
 # 画像・グラフ
@@ -189,6 +186,7 @@ plots/
 .DS_Store
 .AppleDouble
 .LSOverride
+uv.lock
 
 # API keys & config
 config_local.py

@@ -16,7 +16,7 @@ import optuna
 import joblib
 import logging
 from typing import Dict, Tuple, List, Any
-from data_analysis import DataAnalyzer
+from src.ml.data_analysis import DataAnalyzer
 import os
 
 logger = logging.getLogger(__name__)
@@ -47,43 +47,16 @@ class MLPredictor:
     
     def create_advanced_features(self, X: pd.DataFrame) -> pd.DataFrame:
         """
-        高度な特徴量エンジニアリング
+        特徴量エンジニアリング（無効化）
         
         Args:
             X: 基本特徴量データ
             
         Returns:
-            pd.DataFrame: 拡張された特徴量データ
+            pd.DataFrame: 特徴量エンジニアリングなしで元のデータをそのまま返す
         """
-        X_enhanced = X.copy()
-        
-        # 時間ベースの特徴量
-        if 'hour' in X_enhanced.columns:
-            # 時間帯カテゴリ
-            X_enhanced['time_category'] = pd.cut(
-                X_enhanced['hour'], 
-                bins=[0, 6, 12, 18, 24], 
-                labels=['深夜早朝', '午前', '午後', '夜間'],
-                include_lowest=True
-            ).cat.codes
-            
-            # ピーク時間フラグ
-            X_enhanced['is_peak_hour'] = X_enhanced['hour'].apply(
-                lambda x: 1 if x in [9, 10, 11, 12, 13, 14, 15, 16, 17] else 0
-            )
-        
-        # 曜日ベースの特徴量
-        if 'day_of_week' in X_enhanced.columns:
-            # 週の前半・後半
-            X_enhanced['week_half'] = X_enhanced['day_of_week'].apply(
-                lambda x: 0 if x in [0, 1] else 1  # 0,1=前半, 2,3,4=後半
-            )
-            
-        # 相互作用特徴量
-        if 'hour' in X_enhanced.columns and 'day_of_week' in X_enhanced.columns:
-            X_enhanced['hour_weekday_interaction'] = X_enhanced['hour'] * X_enhanced['day_of_week']
-        
-        return X_enhanced
+        # 特徴量エンジニアリングを行わず、入力データをそのまま返す
+        return X.copy()
     
     def objective_density(self, trial, X_train, y_train, X_val, y_val):
         """
@@ -366,16 +339,8 @@ class MLPredictor:
         if not self.models:
             raise ValueError("モデルが訓練されていません。先にtrain_best_models()を実行してください。")
         
-        # 曜日のみから特徴量作成（時間は除去）
-        day_sin = np.sin(2 * np.pi * day_of_week / 7)
-        day_cos = np.cos(2 * np.pi * day_of_week / 7)
-        
-        # 既存モデルとの互換性のため、時間関連特徴量を0で埋める
-        # 注意: 再訓練時には時間特徴量を完全に除去することを推奨
-        hour_sin = 0.0  # 時間情報を無効化
-        hour_cos = 1.0  # 12時に相当する値で固定
-        
-        features = np.array([[day_of_week, 12, day_sin, day_cos, hour_sin, hour_cos]])
+        # 曜日のみから特徴量作成
+        features = np.array([[day_of_week]])
         
         predictions = {}
         
@@ -490,8 +455,13 @@ class MLPredictor:
             'available_models': list(self.models.keys()),
             'best_parameters': self.best_params,
             'model_performance': self.model_performance,
-            'feature_names': ['day_of_week', 'day_of_week_sin', 'day_of_week_cos'],
+            'feature_names': ['day_of_week'],
             'note': '曜日（0-4: 月-金）のみから予測を実行します。時間情報は使用しません。'
         }
         
-        return info 
+        return info
+
+if __name__ == "__main__":
+    predictor = MLPredictor()
+    predictor.load_models()
+    print(predictor.get_model_info())
