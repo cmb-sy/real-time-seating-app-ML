@@ -1,0 +1,6 @@
+# 学習時用（github actionsで実行するため）
+pandas
+numpy
+scikit-learn
+joblib
+optuna
