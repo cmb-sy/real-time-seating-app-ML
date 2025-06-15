@@ -1,17 +1,8 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb",
-        "pythonBin": "python3.11"
-      }
-    }
-  ],
   "functions": {
     "api/index.py": {
+      "runtime": "@vercel/python",
       "maxDuration": 30,
       "memory": 1024
     }
