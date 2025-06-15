@@ -1,5 +1,14 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "src/api/api_router.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/api/predictions/today-tomorrow",
@@ -21,12 +30,5 @@
       "src": "/",
       "dest": "src/api/api_router.py"
     }
-  ],
-  "functions": {
-    "src/api/api_router.py": {
-      "runtime": "python3.9",
-      "maxDuration": 30,
-      "memory": 1024
-    }
-  }
+  ]
 }
