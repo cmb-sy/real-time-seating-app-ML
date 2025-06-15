@@ -31,58 +31,74 @@ class handler(BaseHTTPRequestHandler):
             send_success_response(self, response_data)
             
         except Exception as e:
-            send_error_response(self, f"週間平均データの生成中にエラーが発生しました: {str(e)}")
+            send_error_response(self, f"週間平均データの取得中にエラーが発生しました: {str(e)}")
     
     def calculate_weekly_averages(self):
-        """Supabaseから取得したデータで週間平均計算（平日のみ）"""
-        weekday_names = ["月曜", "火曜", "水曜", "木曜", "金曜"]
-        weekly_averages = []
-        
-        # Supabaseクライアントを取得
-        supabase = get_supabase_client()
-        
-        # density_historyテーブルから平日データ（day_of_week: 0-4）を取得
-        response = supabase.table("density_history").select("*").in_("day_of_week", [0, 1, 2, 3, 4]).execute()
-        
-        if not response.data:
-            raise Exception("Supabaseからデータを取得できませんでした")
-        
-        # 曜日ごとにデータを集計
-        weekday_data = {}
-        
-        for record in response.data:
-            day_of_week = record['day_of_week']
-            if day_of_week not in weekday_data:
-                weekday_data[day_of_week] = {
-                    'density_rates': [],
-                    'occupied_seats': []
-                }
+        """Supabaseから週間平均データを計算"""
+        try:
+            supabase = get_supabase_client()
             
-            weekday_data[day_of_week]['density_rates'].append(float(record['density_rate']))
-            weekday_data[day_of_week]['occupied_seats'].append(int(record['occupied_seats']))
-        
-        # 平日のみ（0-4: 月曜日から金曜日）
-        for weekday in range(5):
-            if weekday in weekday_data:
-                # 平均を計算
-                density_rates = weekday_data[weekday]['density_rates']
-                occupied_seats = weekday_data[weekday]['occupied_seats']
-                
-                avg_density_rate = sum(density_rates) / len(density_rates)
-                avg_occupied_seats = sum(occupied_seats) / len(occupied_seats)
-                
-                # 占有率を0-1の範囲に正規化
-                occupancy_rate = avg_density_rate / 100.0
-                available_seats = 100 - int(avg_occupied_seats)
-            else:
-                # データがない曜日はスキップ
-                continue
+            # 過去4週間のデータを取得
+            response = supabase.table('seating_data').select('*').order('timestamp', desc=True).limit(1000).execute()
             
-            weekly_averages.append({
-                "weekday": weekday,
-                "weekday_name": weekday_names[weekday],
-                "occupancy_rate": round(occupancy_rate, 2),
-                "available_seats": available_seats
-            })
-        
-        return weekly_averages 
+            if not response.data:
+                return self.get_default_weekly_averages()
+            
+            # 曜日別にデータを集計
+            weekday_data = {i: [] for i in range(5)}
+            
+            for record in response.data:
+                try:
+                    # timestampから曜日を取得
+                    from datetime import datetime
+                    timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+                    weekday = timestamp.weekday()
+                    
+                    # 平日のみ処理
+                    if weekday < 5:
+                        occupancy_rate = record.get('occupancy_rate')
+                        occupied_seats = record.get('occupied_seats')
+                        
+                        # データの妥当性チェック
+                        if occupancy_rate is not None and occupied_seats is not None:
+                            # NaNやNoneでない値のみを追加
+                            if not (str(occupancy_rate).lower() in ['nan', 'none', ''] or 
+                                   str(occupied_seats).lower() in ['nan', 'none', '']):
+                                # 値の範囲チェック
+                                if 0 <= float(occupancy_rate) <= 1 and 0 <= int(occupied_seats) <= 8:
+                                    weekday_data[weekday].append({
+                                        'occupancy_rate': float(occupancy_rate),
+                                        'occupied_seats': int(occupied_seats)
+                                    })
+                except Exception as e:
+                    # 個別レコードのエラーは無視して続行
+                    continue
+            
+            # 曜日別平均を計算
+            weekly_averages = []
+            weekday_names = ["月", "火", "水", "木", "金"]
+            
+            for weekday in range(5):
+                data = weekday_data[weekday]
+                
+                avg_occupancy_rate = sum(d['occupancy_rate'] for d in data) / len(data)
+                avg_occupied_seats = sum(d['occupied_seats'] for d in data) / len(data)
+                    
+                # 席数8に基づく調整
+                avg_occupied_seats = min(8, max(0, round(avg_occupied_seats)))
+                avg_occupancy_rate = min(1.0, max(0.0, avg_occupancy_rate))
+                    
+                weekly_averages.append({
+                    "day_of_week": weekday_names[weekday],
+                    "occupancy_rate": round(avg_occupancy_rate, 2),
+                    "occupied_seats": int(avg_occupied_seats)
+                })
+            print(weekly_averages)
+            
+            return weekly_averages
+            
+        except Exception as e:
+            print(f"週間平均計算エラー: {str(e)}")
+
+if __name__ == "__main__":
+    handler().calculate_weekly_averages()

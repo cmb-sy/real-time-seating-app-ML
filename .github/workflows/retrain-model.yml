@@ -37,13 +37,12 @@ jobs:
           python -c "
           import sys
           sys.path.append('.')
-          from src.ml.data_analysis import DataAnalyzer
+          from src.ml.data_processor import MLDataProcessor
 
-          analyzer = DataAnalyzer()
-          analyzer.load_data_from_supabase()
-          stats = analyzer.get_basic_statistics()
-          print(f'データ件数: {stats[\"全体統計\"][\"レコード数\"]}')
-          print(f'平日データ件数: {stats[\"平日統計\"][\"レコード数\"]}')
+          processor = MLDataProcessor()
+          df = processor.load_data_from_supabase()
+          print(f'データ件数: {len(df)}')
+          print(f'平日データ件数: {len(processor.df_weekdays)}')
           "
 
       - name: Retrain ML models

@@ -28,7 +28,7 @@ class handler(BaseHTTPRequestHandler):
             
             # 平日チェック（月-金のみ対応）
             if today.weekday() >= 5:  # 土日の場合
-                send_error_response(self, "土日は対応していません。平日（月-金）のみ予測を提供しています。")
+                send_error_response(self, "土日は営業していません。平日（月-金）のみ予測を提供しています。")
                 return
             
             if tomorrow.weekday() >= 5:  # 明日が土日の場合
@@ -45,14 +45,17 @@ class handler(BaseHTTPRequestHandler):
             today_weekday = today.weekday()
             today_prediction = self.generate_prediction_with_ml(model_data, today_weekday)
             
+            weekday_names = ["月", "火", "水", "木", "金"]
+            today_weekday_name = weekday_names[today.weekday()]
+            
             response_data = {
                 "success": True,
                 "data": {
                     "today": {
                         "date": today.isoformat(),
-                        "day_of_week": ["月", "火", "水", "木", "金"][today.weekday()],
+                        "day_of_week": today_weekday_name,
                         "occupancy_rate": today_prediction["occupancy_rate"],
-                        "available_seats": today_prediction["available_seats"]
+                        "occupied_seats": today_prediction["occupied_seats"]
                     }
                 }
             }
@@ -61,20 +64,21 @@ class handler(BaseHTTPRequestHandler):
             if tomorrow is not None:
                 tomorrow_weekday = tomorrow.weekday()
                 tomorrow_prediction = self.generate_prediction_with_ml(model_data, tomorrow_weekday)
+                tomorrow_weekday_name = weekday_names[tomorrow.weekday()] if tomorrow.weekday() < len(weekday_names) else "不明"
                 
                 response_data["data"]["tomorrow"] = {
                     "date": tomorrow.isoformat(),
-                    "day_of_week": ["月", "火", "水", "木", "金"][tomorrow.weekday()],
+                    "day_of_week": tomorrow_weekday_name,
                     "occupancy_rate": tomorrow_prediction["occupancy_rate"],
-                    "available_seats": tomorrow_prediction["available_seats"]
+                    "occupied_seats": tomorrow_prediction["occupied_seats"]
                 }
             else:
                 response_data["data"]["tomorrow"] = {
                     "date": None,
                     "day_of_week": None,
                     "occupancy_rate": None,
-                    "available_seats": None,
-                    "message": "明日は土日のため対応していません"
+                    "occupied_seats": None,
+                    "message": "明日は土日のため営業していません"
                 }
             
             send_success_response(self, response_data)
@@ -110,9 +114,12 @@ class handler(BaseHTTPRequestHandler):
             print(f"モデルロードエラー: {str(e)}")
             return None
     
-    
     def generate_prediction_with_ml(self, model_data, day_of_week):
         """曜日別の予測を生成"""
+        # 平日のみ対応（0-4: 月-金）
+        if day_of_week < 0 or day_of_week > 4:
+            raise Exception(f"サポートされていない曜日です: {day_of_week}（平日のみ対応）")
+            
         features = np.array([[day_of_week]])
             
         density_model = model_data.get("density_model")
@@ -121,6 +128,10 @@ class handler(BaseHTTPRequestHandler):
         if density_model and seats_model:
             density_pred = density_model.predict(features)[0]
             seats_pred = seats_model.predict(features)[0]
+            
+            # 予測値を適切な範囲に調整（席数8に対応）
+            density_pred = max(0, min(100, density_pred))
+            seats_pred = max(0, min(int(seats_pred), 8))  # 席数8に制限
             
             base_prediction = {
                 "density_rate": round(density_pred, 2),
@@ -141,9 +152,14 @@ class handler(BaseHTTPRequestHandler):
         
         # 占有率を0-1の範囲に正規化
         occupancy_rate = density_rate / 100.0
-        available_seats = 100 - int(occupied_seats)
+        
+        # 占有率から実際の占有席数を計算（席数8に基づく）
+        actual_occupied_seats = min(8, max(0, round(occupancy_rate * 8)))
         
         return {
             "occupancy_rate": round(occupancy_rate, 2),
-            "available_seats": available_seats
-        } 
+            "occupied_seats": actual_occupied_seats
+        }
+
+if __name__ == "__main__":
+    handler().do_GET()

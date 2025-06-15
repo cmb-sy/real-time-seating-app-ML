@@ -14,14 +14,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def run_full_ml_pipeline(n_trials: int = 100, target_type: str = 'both', use_feature_engineering: bool = True):
+def run_full_ml_pipeline(n_trials: int = 100, target_type: str = 'both'):
     """
-    機械学習パイプライン全体を実行
+    機械学習パイプライン全体を実行（特徴量エンジニアリング常に有効）
     
     Args:
         n_trials: Optunaの最適化試行回数
         target_type: 最適化対象 ('density', 'seats', 'both')
-        use_feature_engineering: 特徴量エンジニアリングを使用するかどうか
     """
     logger.info("=== 機械学習パイプライン開始 ===")
     
@@ -44,11 +43,10 @@ def run_full_ml_pipeline(n_trials: int = 100, target_type: str = 'both', use_fea
     
     try:
         logger.info(f"ハイパーパラメータ最適化開始 (試行回数: {n_trials})")
-        logger.info(f"特徴量エンジニアリング: {'有効' if use_feature_engineering else '無効'}")
         optimization_results = predictor.optimize_hyperparameters(
             target_type=target_type,
             n_trials=n_trials,
-            use_feature_engineering=use_feature_engineering
+            use_feature_engineering=True  # 常に有効
         )
         
         # 結果表示
@@ -62,7 +60,7 @@ def run_full_ml_pipeline(n_trials: int = 100, target_type: str = 'both', use_fea
         
         # 最適パラメータでモデル訓練
         logger.info("最適パラメータでモデル訓練中...")
-        training_results = predictor.train_best_models(use_feature_engineering=use_feature_engineering)
+        training_results = predictor.train_best_models(use_feature_engineering=True)  # 常に有効
         
         # 結果表示
         if 'density' in training_results:
@@ -172,18 +170,13 @@ def main():
                        help='Optunaの最適化試行回数 (デフォルト: 50)')
     parser.add_argument('--target', choices=['density', 'seats', 'both'], default='both',
                        help='最適化対象 (デフォルト: both)')
-    parser.add_argument('--feature-engineering', action='store_true', default=True,
-                       help='特徴量エンジニアリングを使用する (デフォルト: True)')
-    parser.add_argument('--no-feature-engineering', action='store_false', dest='feature_engineering',
-                       help='特徴量エンジニアリングを無効にする')
     
     args = parser.parse_args()
     
     if args.mode == 'train':
         success = run_full_ml_pipeline(
             n_trials=args.n_trials, 
-            target_type=args.target,
-            use_feature_engineering=args.feature_engineering
+            target_type=args.target
         )
         if success:
             logger.info("✅ 機械学習パイプラインが正常に完了しました")

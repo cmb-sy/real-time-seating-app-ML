@@ -385,7 +385,7 @@ class MLPredictor:
             else:
                 seats_pred = model.predict(features)[0]
             
-            predictions['occupied_seats'] = int(max(0, seats_pred))  # 負の値は0に制限
+            predictions['occupied_seats'] = int(max(0, min(8, seats_pred)))  # 席数8に制限
         
         return predictions
     
