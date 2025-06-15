@@ -5,43 +5,60 @@ import os
 import json
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler
+import sys
 
 # Supabaseクライアント設定
 def get_supabase_client():
     """Supabaseクライアントを初期化"""
     try:
-        # Supabaseライブラリの動的インポート
-        try:
-            from supabase import create_client, Client
-        except ImportError as import_error:
-            print(f"Supabaseライブラリのインポートエラー: {import_error}")
-            return None
-        
-        # 環境変数の取得と検証
+        # 環境変数の詳細チェック
         supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
         supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
         
-        print(f"環境変数チェック - URL存在: {bool(supabase_url)}, Key存在: {bool(supabase_key)}")
+        print(f"=== Supabase診断情報 ===")
+        print(f"URL存在: {bool(supabase_url)}")
+        print(f"URL値: {supabase_url[:50] if supabase_url else 'None'}...")
+        print(f"Key存在: {bool(supabase_key)}")
+        print(f"Key値: {supabase_key[:50] if supabase_key else 'None'}...")
+        print(f"環境変数一覧: {list(os.environ.keys())}")
         
         if not supabase_url:
-            print("NEXT_PUBLIC_SUPABASE_URL が設定されていません")
+            print("❌ NEXT_PUBLIC_SUPABASE_URL が設定されていません")
             return None
             
         if not supabase_key:
-            print("SUPABASE_SERVICE_ROLE_KEY または NEXT_PUBLIC_SUPABASE_ANON_KEY が設定されていません")
+            print("❌ SUPABASE_SERVICE_ROLE_KEY または NEXT_PUBLIC_SUPABASE_ANON_KEY が設定されていません")
+            return None
+        
+        # Supabaseライブラリの動的インポート
+        try:
+            print("📦 Supabaseライブラリをインポート中...")
+            from supabase import create_client, Client
+            print("✅ Supabaseライブラリのインポートに成功")
+        except ImportError as import_error:
+            print(f"❌ Supabaseライブラリのインポートエラー: {import_error}")
             return None
         
         # Supabaseクライアントの作成
         try:
+            print("🔗 Supabaseクライアントを作成中...")
             supabase: Client = create_client(supabase_url, supabase_key)
-            print("Supabaseクライアントの初期化に成功しました")
+            print("✅ Supabaseクライアントの初期化に成功")
+            
+            # 接続テスト
+            print("🧪 データベース接続テスト中...")
+            test_response = supabase.table('density_history').select('*').limit(1).execute()
+            print(f"✅ データベース接続テストに成功: {len(test_response.data) if test_response.data else 0}件のデータ")
+            
             return supabase
         except Exception as client_error:
-            print(f"Supabaseクライアント作成エラー: {client_error}")
+            print(f"❌ Supabaseクライアント作成エラー: {client_error}")
+            print(f"エラータイプ: {type(client_error).__name__}")
             return None
             
     except Exception as e:
-        print(f"Supabaseクライアント初期化の全般的エラー: {e}")
+        print(f"❌ Supabaseクライアント初期化の全般的エラー: {e}")
+        print(f"エラータイプ: {type(e).__name__}")
         return None
 
 def get_database_prediction(day_of_week):
@@ -238,6 +255,59 @@ def handle_database_test():
             "error": f"データベース接続テストでエラーが発生しました: {str(e)}"
         }
 
+def handle_diagnostic():
+    """詳細診断エンドポイント"""
+    try:
+        diagnostic_info = {
+            "success": True,
+            "environment": "production",
+            "python_version": f"{sys.version}",
+            "environment_variables": {
+                "NEXT_PUBLIC_SUPABASE_URL": bool(os.environ.get('NEXT_PUBLIC_SUPABASE_URL')),
+                "SUPABASE_SERVICE_ROLE_KEY": bool(os.environ.get('SUPABASE_SERVICE_ROLE_KEY')),
+                "NEXT_PUBLIC_SUPABASE_ANON_KEY": bool(os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')),
+                "VERCEL": os.environ.get('VERCEL'),
+                "all_env_keys": list(os.environ.keys())
+            },
+            "supabase_test": None
+        }
+        
+        # Supabaseライブラリテスト
+        try:
+            from supabase import create_client, Client
+            diagnostic_info["supabase_library"] = "✅ インポート成功"
+            
+            # 環境変数取得
+            supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
+            supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+            
+            if supabase_url and supabase_key:
+                # クライアント作成テスト
+                supabase = create_client(supabase_url, supabase_key)
+                diagnostic_info["supabase_client"] = "✅ クライアント作成成功"
+                
+                # データベース接続テスト
+                response = supabase.table('density_history').select('*').limit(1).execute()
+                diagnostic_info["supabase_test"] = {
+                    "status": "✅ 接続成功",
+                    "data_count": len(response.data) if response.data else 0
+                }
+            else:
+                diagnostic_info["supabase_test"] = "❌ 環境変数が不足"
+                
+        except ImportError as e:
+            diagnostic_info["supabase_library"] = f"❌ インポートエラー: {str(e)}"
+        except Exception as e:
+            diagnostic_info["supabase_test"] = f"❌ 接続エラー: {str(e)}"
+        
+        return diagnostic_info
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"診断エラー: {str(e)}"
+        }
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """プリフライトリクエストへの対応"""
@@ -263,6 +333,8 @@ class handler(BaseHTTPRequestHandler):
                 response_data = handle_weekly_average()
             elif path == "/api/test-db":
                 response_data = handle_database_test()
+            elif path == "/api/diagnostic":
+                response_data = handle_diagnostic()
             elif path == "/":
                 response_data = {
                     "success": True,
@@ -271,7 +343,8 @@ class handler(BaseHTTPRequestHandler):
                     "endpoints": {
                         "today_tomorrow": "/api/predictions/today-tomorrow",
                         "weekly_average": "/api/predictions/weekly-average",
-                        "database_test": "/api/test-db"
+                        "database_test": "/api/test-db",
+                        "diagnostic": "/api/diagnostic"
                     },
                     "status": "運用中",
                     "environment": "production"
@@ -283,7 +356,8 @@ class handler(BaseHTTPRequestHandler):
                     "available_endpoints": [
                         "/api/predictions/today-tomorrow",
                         "/api/predictions/weekly-average",
-                        "/api/test-db"
+                        "/api/test-db",
+                        "/api/diagnostic"
                     ]
                 }
             
