@@ -4,6 +4,7 @@
 import os
 import json
 from datetime import datetime, timedelta
+from urllib.parse import parse_qs
 
 def get_supabase_client():
     """Supabaseクライアントを初期化"""
@@ -56,9 +57,12 @@ def get_database_prediction(day_of_week):
         print(f"データベース予測エラー: {e}")
         raise Exception(f"データベースから予測データを取得できませんでした: {str(e)}")
 
-def handler(request):
+def handler(request, context):
     """Vercel用のハンドラー関数"""
     try:
+        # リクエストメソッドの取得
+        method = request.method if hasattr(request, 'method') else 'GET'
+        
         # CORSヘッダーの設定
         headers = {
             'Access-Control-Allow-Origin': '*',
@@ -68,7 +72,7 @@ def handler(request):
         }
         
         # OPTIONSリクエスト（プリフライト）の処理
-        if request.method == 'OPTIONS':
+        if method == 'OPTIONS':
             return {
                 'statusCode': 200,
                 'headers': headers,
@@ -76,7 +80,7 @@ def handler(request):
             }
         
         # GETリクエストの処理
-        if request.method == 'GET':
+        if method == 'GET':
             # 現在の日時を取得
             now = datetime.now()
             today = now.date()
@@ -141,7 +145,7 @@ def handler(request):
             'headers': headers,
             'body': json.dumps({
                 "success": False,
-                "error": f"サポートされていないHTTPメソッド: {request.method}"
+                "error": f"サポートされていないHTTPメソッド: {method}"
             }, ensure_ascii=False)
         }
             
