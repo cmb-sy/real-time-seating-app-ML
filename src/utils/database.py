@@ -3,7 +3,7 @@ Supabaseデータベース接続モジュール
 """
 
 from supabase import create_client, Client
-from src.utils.config import NEXT_PUBLIC_SUPABASE_URL, SUPABASE_ANON_KEY
+from src.utils.config import NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 def get_supabase_client() -> Client:
     """
@@ -12,10 +12,10 @@ def get_supabase_client() -> Client:
     Returns:
         Client: Supabaseクライアントインスタンス
     """
-    if not NEXT_PUBLIC_SUPABASE_URL or not SUPABASE_ANON_KEY:
+    if not NEXT_PUBLIC_SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         raise Exception("Supabase環境変数が設定されていません")
     
-    supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_ANON_KEY)
+    supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     return supabase
 
 # グローバルクライアントインスタンス

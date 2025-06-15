@@ -20,7 +20,7 @@ class MLDataProcessor:
         self.df = None
         self.df_weekdays = None
         # Supabaseクライアント
-        self.supabase_client = create_client(config.NEXT_PUBLIC_SUPABASE_URL, config.SUPABASE_ANON_KEY)
+        self.supabase_client = create_client(config.NEXT_PUBLIC_SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY)
         # 特徴量名を管理
         self.feature_names = []
         
