@@ -1,3 +1,7 @@
+# 全てのソースコード（apiディレクトリ以外）
+src/
+!api/
+
 # Python cache files
 **/__pycache__/
 *.pyc
@@ -24,11 +28,7 @@ desktop.ini
 .git/
 .gitignore
 
-# ML training files (推論には不要)
-src/ml/
-!src/ml/__init__.py
-
-# Models directory (src/api/に必要なもののみ)
+# Models directory (api/に必要なもののみ)
 models/
 
 # Data files (exclude training data, keep models)
@@ -120,6 +120,10 @@ site-packages/
 **/jupyter/
 **/notebook/
 **/ipython/
+**/pandas/
+**/matplotlib/
+**/seaborn/
+**/plotly/
 
 # 大きなライブラリの不要な部分
 **/scipy/sparse/linalg/dsolve/linsolve/
@@ -145,4 +149,8 @@ runtime.txt
 **/__pycache__/
 **/site-packages/pip/
 **/site-packages/setuptools/
-**/site-packages/wheel/ 
+**/site-packages/wheel/
+
+# 不要な依存関係ファイル
+requirements.txt
+requirements-vercel.txt 
