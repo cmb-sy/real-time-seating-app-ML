@@ -11,8 +11,8 @@ from urllib.parse import urlparse
 from datetime import datetime, timedelta
 
 # 環境変数の取得
-SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+NEXT_PUBLIC_SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 class VercelHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
