@@ -144,7 +144,7 @@ class APIRouter(BaseHTTPRequestHandler):
             send_error_response(self, f"今日・明日予測APIでエラーが発生しました: {str(e)}")
     
     def handle_weekly_average_direct(self):
-        """週間平均予測APIの直接処理（高速化）"""
+        """週間平均予測APIの直接処理（高速化）- 土日データ除外"""
         try:
             supabase = get_supabase_client()
             if not supabase:
@@ -157,27 +157,29 @@ class APIRouter(BaseHTTPRequestHandler):
             if not data or len(data) == 0:
                 raise Exception("データベースにデータが存在しません")
                 
-            # 曜日別に集計（0-6: 月-日）
-            day_of_week_data = {i: [] for i in range(7)}
+            # 曜日別に集計（0-4: 月-金のみ、土日は除外）
+            day_of_week_data = {i: [] for i in range(5)}  # 平日のみ（0-4）
             
             for record in data:
                 day_of_week = record.get('day_of_week')
                 density_rate = record.get('density_rate', 0)
                 occupied_seats = record.get('occupied_seats', 0)
                 
-                if day_of_week is not None and 0 <= day_of_week <= 6:
+                # 土日（5, 6）のデータは除外し、平日（0-4）のみ処理
+                if day_of_week is not None and 0 <= day_of_week <= 4:
                     occupancy_rate = density_rate / 100.0 if density_rate > 1 else density_rate
                     day_of_week_data[day_of_week].append({
                         'occupancy_rate': occupancy_rate,
                         'occupied_seats': occupied_seats
                     })
             
-            # 曜日別の平均を計算
-            weekday_names = ["月", "火", "水", "木", "金", "土", "日"]
+            # 曜日別の平均を計算（平日のみ）
+            weekday_names = ["月", "火", "水", "木", "金"]  # 土日を除外
             weekly_averages = {
                 "success": True,
                 "data": {
-                    "weekly_averages": []
+                    "weekly_averages": [],
+                    "note": "土日のデータは除外されています（営業日：月-金のみ）"
                 }
             }
             
@@ -193,7 +195,8 @@ class APIRouter(BaseHTTPRequestHandler):
                         "day_of_week": day,
                         "day_name": weekday_names[day],
                         "occupancy_rate": round(final_occupancy_rate, 2),
-                        "occupied_seats": final_occupied_seats
+                        "occupied_seats": final_occupied_seats,
+                        "data_count": len(values)  # データ件数も追加
                     })
                 else:
                     weekly_averages["data"]["weekly_averages"].append({
@@ -201,7 +204,8 @@ class APIRouter(BaseHTTPRequestHandler):
                         "day_name": weekday_names[day],
                         "occupancy_rate": 0.0,
                         "occupied_seats": 0,
-                        "note": "データなし"
+                        "note": "データなし",
+                        "data_count": 0
                     })
             
             send_success_response(self, weekly_averages)
