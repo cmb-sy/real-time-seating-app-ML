@@ -1,35 +1,12 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb",
-        "pipInstallArgs": "-r requirements-vercel.txt"
-      }
+  "functions": {
+    "api/**/*.py": {
+      "runtime": "@vercel/python@4.1.0"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/predictions/today-tomorrow",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/api/predictions/weekly-average",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/predictions/today-tomorrow",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/predictions/weekly-average",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/",
-      "dest": "api/index.py"
+  },
+  "build": {
+    "env": {
+      "PYTHONPATH": "$PYTHONPATH:."
     }
-  ]
+  }
 }

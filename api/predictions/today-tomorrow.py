@@ -4,7 +4,6 @@
 import os
 import json
 from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler
 
 def get_supabase_client():
     """Supabaseクライアントを初期化"""
@@ -57,19 +56,27 @@ def get_database_prediction(day_of_week):
         print(f"データベース予測エラー: {e}")
         raise Exception(f"データベースから予測データを取得できませんでした: {str(e)}")
 
-class handler(BaseHTTPRequestHandler):
-    def do_OPTIONS(self):
-        """プリフライトリクエストへの対応"""
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept, X-Requested-With")
-        self.send_header("Access-Control-Max-Age", "86400")
-        self.end_headers()
-    
-    def do_GET(self):
-        """今日・明日予測API処理"""
-        try:
+def handler(request):
+    """Vercel用のハンドラー関数"""
+    try:
+        # CORSヘッダーの設定
+        headers = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, Origin, Accept, X-Requested-With',
+            'Content-Type': 'application/json'
+        }
+        
+        # OPTIONSリクエスト（プリフライト）の処理
+        if request.method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps({"message": "CORS preflight"})
+            }
+        
+        # GETリクエストの処理
+        if request.method == 'GET':
             # 現在の日時を取得
             now = datetime.now()
             today = now.date()
@@ -122,22 +129,33 @@ class handler(BaseHTTPRequestHandler):
                 "environment": "production"
             }
             
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept, X-Requested-With")
-            self.end_headers()
-            self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode("utf-8"))
-            
-        except Exception as e:
-            error_response = {
-                "success": False,
-                "error": f"今日・明日予測APIでエラーが発生しました: {str(e)}"
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(response_data, ensure_ascii=False)
             }
+        
+        # サポートされていないメソッド
+        return {
+            'statusCode': 405,
+            'headers': headers,
+            'body': json.dumps({
+                "success": False,
+                "error": f"サポートされていないHTTPメソッド: {request.method}"
+            }, ensure_ascii=False)
+        }
             
-            self.send_response(500)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(json.dumps(error_response, ensure_ascii=False).encode("utf-8")) 
+    except Exception as e:
+        error_response = {
+            "success": False,
+            "error": f"今日・明日予測APIでエラーが発生しました: {str(e)}"
+        }
+        
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps(error_response, ensure_ascii=False)
+        } 
