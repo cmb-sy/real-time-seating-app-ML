@@ -60,31 +60,8 @@ class APIRouter(BaseHTTPRequestHandler):
             today_weekday = today.weekday()
             tomorrow_weekday = tomorrow.weekday()
             
-            weekday_names = ["月", "火", "水", "木", "金", "土", "日"]
+            weekday_names = ["月", "火", "水", "木", "金"]
             
-            # 今日と明日の両方が土日の場合は、モデルロードを避けて早期リターン
-            if today_weekday >= 5 and tomorrow_weekday >= 5:
-                response_data = {
-                    "success": True,
-                    "data": {
-                        "today": {
-                            "date": today.isoformat(),
-                            "day_of_week": weekday_names[today_weekday],
-                            "occupancy_rate": 0.0,
-                            "occupied_seats": 0,
-                            "note": "土日はデータがありません"
-                        },
-                        "tomorrow": {
-                            "date": tomorrow.isoformat(),
-                            "day_of_week": weekday_names[tomorrow_weekday],
-                            "occupancy_rate": 0.0,
-                            "occupied_seats": 0,
-                            "note": "土日はデータがありません"
-                        }
-                    }
-                }
-                send_success_response(self, response_data)
-                return
             
             # 平日がある場合のみモデルをロード
             model_data = None
