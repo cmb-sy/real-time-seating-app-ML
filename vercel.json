@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "src/api/*.py",
+      "src": "src/api/api_router.py",
       "use": "@vercel/python",
       "config": {
         "maxLambdaSize": "50mb"
@@ -11,33 +11,33 @@
   ],
   "routes": [
     {
-      "src": "/predictions/today-tomorrow",
-      "dest": "src/api/predictions_today_tomorrow.py"
-    },
-    {
       "src": "/api/predictions/today-tomorrow",
-      "dest": "src/api/predictions_today_tomorrow.py"
-    },
-    {
-      "src": "/predictions/weekly-average",
-      "dest": "src/api/predictions_weekly_average.py"
+      "dest": "src/api/api_router.py"
     },
     {
       "src": "/api/predictions/weekly-average",
-      "dest": "src/api/predictions_weekly_average.py"
+      "dest": "src/api/api_router.py"
     },
     {
-      "src": "/supabase/sync",
-      "dest": "src/api/supabase_sync.py"
+      "src": "/predictions/today-tomorrow",
+      "dest": "src/api/api_router.py"
     },
     {
-      "src": "/api/supabase/sync",
-      "dest": "src/api/supabase_sync.py"
+      "src": "/predictions/weekly-average",
+      "dest": "src/api/api_router.py"
+    },
+    {
+      "src": "/",
+      "dest": "src/api/api_router.py"
     }
   ],
   "functions": {
-    "src/api/*.py": {
+    "src/api/api_router.py": {
       "maxDuration": 30
     }
+  },
+  "env": {
+    "SUPABASE_URL": "@supabase_url",
+    "SUPABASE_KEY": "@supabase_key"
   }
 }
