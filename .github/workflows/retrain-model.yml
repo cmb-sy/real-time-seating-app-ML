@@ -1,30 +1,36 @@
-name: Model Retraining
+name: 機械学習モデル再訓練・自動更新
 
 on:
+  # 手動実行
+  workflow_dispatch:
+  # 毎週月曜日の午前2時に自動実行
   schedule:
-    # 隔週の日曜日 午前2時（UTC）に実行
-    - cron: "0 2 * * 0"
-  workflow_dispatch: # 手動実行も可能
+    - cron: "0 2 * * 1"
+  # データが更新された時（特定のファイルが変更された時）
+  push:
+    paths:
+      - "src/ml/**"
+      - "requirements.txt"
 
 jobs:
-  retrain-model:
+  retrain-and-update:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Python環境をセットアップ
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
-      - name: Install dependencies
+      - name: 依存関係をインストール
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Set up environment variables
+      - name: 環境変数を設定
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -32,117 +38,43 @@ jobs:
           echo "SUPABASE_URL=$SUPABASE_URL" >> $GITHUB_ENV
           echo "SUPABASE_KEY=$SUPABASE_KEY" >> $GITHUB_ENV
 
-      - name: Run data analysis
+      - name: 機械学習モデルを訓練
         run: |
-          python -c "
-          import sys
-          sys.path.append('.')
-          from src.ml.data_processor import MLDataProcessor
+          export PYTHONPATH=$GITHUB_WORKSPACE
+          python src/ml/train_ml_models.py --mode train
 
-          processor = MLDataProcessor()
-          df = processor.load_data_from_supabase()
-          print(f'データ件数: {len(df)}')
-          print(f'平日データ件数: {len(processor.df_weekdays)}')
-          "
-
-      - name: Retrain ML models
+      - name: モデルファイルをAPIディレクトリにコピー
         run: |
-          python -c "
-          import sys
-          sys.path.append('.')
-          from src.ml.train_ml_models import run_full_ml_pipeline
+          cp models/*.joblib src/api/
 
-          # 機械学習パイプライン全体を実行
-          success = run_full_ml_pipeline(n_trials=30, target_type='both')
-          if success:
-              print('✅ モデルの再学習が完了しました')
-          else:
-              print('❌ モデルの再学習に失敗しました')
-              exit(1)
-          "
-
-      - name: Check model files
-        run: |
-          echo "モデルファイルの確認:"
-          if [ -d "src/models" ]; then
-            ls -la src/models/
-            echo "- density_model.joblib: $(ls -lh src/models/density_model.joblib 2>/dev/null || echo '見つかりません')"
-            echo "- seats_model.joblib: $(ls -lh src/models/seats_model.joblib 2>/dev/null || echo '見つかりません')"
-            echo "- best_params.joblib: $(ls -lh src/models/best_params.joblib 2>/dev/null || echo '見つかりません')"
-            echo "- model_performance.joblib: $(ls -lh src/models/model_performance.joblib 2>/dev/null || echo '見つかりません')"
-          else
-            echo "src/models ディレクトリが見つかりません"
-          fi
-
-      - name: Copy models to API directory
-        run: |
-          mkdir -p src/api/
-          if [ -d "src/models" ] && [ "$(ls -A src/models/*.joblib 2>/dev/null)" ]; then
-            cp src/models/*.joblib src/api/
-            echo "モデルファイルをAPIディレクトリにコピーしました:"
-            ls -la src/api/*.joblib
-          else
-            echo "コピーするモデルファイルが見つかりません"
-            exit 1
-          fi
-
-      - name: Test model predictions
-        run: |
-          python -c "
-          import sys
-          sys.path.append('.')
-          from src.ml.train_ml_models import test_predictions
-
-          # 予測テストを実行
-          success = test_predictions()
-          if success:
-              print('✅ 予測テストが完了しました')
-          else:
-              print('❌ 予測テストに失敗しました')
-              exit(1)
-          "
-
-      - name: Commit and push updated models
+      - name: モデルファイルをコミット・プッシュ
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-
-          # 変更があるかチェック
-          git add src/models/*.joblib src/api/*.joblib 2>/dev/null || true
-
+          git add src/api/*.joblib
           if git diff --staged --quiet; then
             echo "モデルファイルに変更がありません"
           else
-            git commit -m "🤖 自動モデル再学習 - $(date '+%Y-%m-%d %H:%M:%S')"
+            git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')"
             git push
-            echo "モデルファイルを更新しました"
+            echo "✅ モデルファイルを更新しました - Vercelが自動デプロイを開始します"
           fi
 
-      - name: Create deployment comment
+      - name: 完了通知
         run: |
-          echo "## モデル再学習完了" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 モデル再訓練完了" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**実行日時**: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "**実行トリガー**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 更新されたファイル" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 更新されたファイル" >> $GITHUB_STEP_SUMMARY
           echo "- density_model.joblib" >> $GITHUB_STEP_SUMMARY
           echo "- seats_model.joblib" >> $GITHUB_STEP_SUMMARY
           echo "- best_params.joblib" >> $GITHUB_STEP_SUMMARY
           echo "- model_performance.joblib" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 次回実行予定" >> $GITHUB_STEP_SUMMARY
-          echo "隔週の日曜日 午前2時（UTC）" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 デプロイ状況" >> $GITHUB_STEP_SUMMARY
+          echo "Vercelが自動的にデプロイを開始します" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 手動実行" >> $GITHUB_STEP_SUMMARY
-          echo "GitHub ActionsのWorkflowページから手動実行も可能です。" >> $GITHUB_STEP_SUMMARY
-
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "## モデル再学習失敗" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**実行日時**: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-          echo "**エラー**: モデルの再学習中にエラーが発生しました" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "詳細はワークフローのログを確認してください。" >> $GITHUB_STEP_SUMMARY
+          echo "### ⏰ 次回実行予定" >> $GITHUB_STEP_SUMMARY
+          echo "毎週月曜日 午前2時（UTC）" >> $GITHUB_STEP_SUMMARY

@@ -21,6 +21,8 @@ class MLDataProcessor:
         self.df_weekdays = None
         # Supabaseクライアント
         self.supabase_client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+        # 特徴量名を管理
+        self.feature_names = []
         
     def load_data_from_supabase(self) -> pd.DataFrame:
         """
@@ -55,7 +57,7 @@ class MLDataProcessor:
     
     def create_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        特徴量エンジニアリング
+        簡素化された特徴量エンジニアリング（月火・水・木金の分類を活用）
         
         Args:
             df: 元データ
@@ -67,47 +69,20 @@ class MLDataProcessor:
         
         feature_df = df.copy()
         
-        # 2. 曜日関連特徴量
+        # 1. 曜日ダミー変数（基本的な特徴量）
         feature_df['is_monday'] = (feature_df['day_of_week'] == 0).astype(int)
         feature_df['is_tuesday'] = (feature_df['day_of_week'] == 1).astype(int)
         feature_df['is_wednesday'] = (feature_df['day_of_week'] == 2).astype(int)
         feature_df['is_thursday'] = (feature_df['day_of_week'] == 3).astype(int)
         feature_df['is_friday'] = (feature_df['day_of_week'] == 4).astype(int)
         
-        # 3. 週の前半・後半
-        feature_df['is_early_week'] = (feature_df['day_of_week'] <= 2).astype(int)  # 月火水
-        feature_df['is_late_week'] = (feature_df['day_of_week'] >= 3).astype(int)   # 木金
+        # 2. 週の分類（月火・水・木金の3グループ）
+        feature_df['is_early_week'] = (feature_df['day_of_week'].isin([0, 1])).astype(int)  # 月火
+        feature_df['is_mid_week'] = (feature_df['day_of_week'] == 2).astype(int)           # 水
+        feature_df['is_late_week'] = (feature_df['day_of_week'].isin([3, 4])).astype(int)  # 木金
         
-        # 6. 統計的特徴量（移動平均など）
-        # 曜日別の移動平均（過去3回の同じ曜日の平均）
-        for day in range(5):
-            day_data = feature_df[feature_df['day_of_week'] == day].copy()
-            if len(day_data) > 0:
-                day_data = day_data.sort_values('created_at')
-                day_data[f'density_ma3_day{day}'] = day_data['density_rate'].rolling(window=3, min_periods=1).mean()
-                day_data[f'seats_ma3_day{day}'] = day_data['occupied_seats'].rolling(window=3, min_periods=1).mean()
-                
-                # 元のDataFrameに結合
-                feature_df = feature_df.merge(
-                    day_data[['id', f'density_ma3_day{day}', f'seats_ma3_day{day}']],
-                    on='id', how='left'
-                )
-                
-                # NaNを0で埋める
-                feature_df[f'density_ma3_day{day}'] = feature_df[f'density_ma3_day{day}'].fillna(0)
-                feature_df[f'seats_ma3_day{day}'] = feature_df[f'seats_ma3_day{day}'].fillna(0)
-        
-        # 7. 交互作用特徴量
+        # 3. 密度率と座席数の比率（基本的な交互作用）
         feature_df['density_seats_ratio'] = feature_df['density_rate'] / (feature_df['occupied_seats'] + 1)  # ゼロ除算回避
-        
-        # 8. ラグ特徴量（前回の値）
-        feature_df = feature_df.sort_values(['day_of_week', 'created_at'])
-        feature_df['prev_density'] = feature_df.groupby('day_of_week')['density_rate'].shift(1).fillna(0)
-        feature_df['prev_seats'] = feature_df.groupby('day_of_week')['occupied_seats'].shift(1).fillna(0)
-        
-        # 9. 差分特徴量
-        feature_df['density_diff'] = feature_df['density_rate'] - feature_df['prev_density']
-        feature_df['seats_diff'] = feature_df['occupied_seats'] - feature_df['prev_seats']
         
         logger.info(f"特徴量エンジニアリング完了: {len(feature_df.columns)} 個の特徴量を生成")
         
@@ -115,24 +90,26 @@ class MLDataProcessor:
     
     def get_feature_columns(self) -> List[str]:
         """
-        機械学習で使用する特徴量カラムのリストを取得
+        機械学習で使用する特徴量カラムのリスト（月火・水・木金分類対応）
         
         Returns:
             List[str]: 特徴量カラム名のリスト
         """
-        base_features = [   
-            'day_of_week', 'density_seats_ratio',
-            'prev_density', 'prev_seats', 'density_diff', 'seats_diff',
-            'is_monday', 'is_tuesday', 'is_wednesday', 'is_thursday', 'is_friday',
-            'is_early_week', 'is_late_week',
+        # 月火・水・木金分類を含む特徴量セット（10個の特徴量）
+        features = [   
+            'day_of_week',           # 基本的な曜日情報
+            'density_seats_ratio',   # 密度率と座席数の比率
+            'is_monday',             # 曜日ダミー変数
+            'is_tuesday',
+            'is_wednesday', 
+            'is_thursday',
+            'is_friday',
+            'is_early_week',         # 週前半フラグ（月火）
+            'is_mid_week',           # 週中フラグ（水）
+            'is_late_week'           # 週後半フラグ（木金）
         ]
         
-        # 移動平均特徴量を追加
-        ma_features = []
-        for day in range(5):
-            ma_features.extend([f'density_ma3_day{day}', f'seats_ma3_day{day}'])
-        
-        return base_features + ma_features
+        return features
     
     def prepare_ml_data(self, use_feature_engineering: bool = True) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -161,11 +138,15 @@ class MLDataProcessor:
             available_features = [col for col in feature_columns if col in ml_data.columns]
             X = ml_data[available_features].values
             
+            # 特徴量名を保存
+            self.feature_names = available_features
+            
             logger.info(f"特徴量エンジニアリング使用: {len(available_features)} 個の特徴量")
             logger.info(f"使用特徴量: {available_features}")
         else:
             # 基本特徴量: 曜日のみ
             X = ml_data[['day_of_week']].values
+            self.feature_names = ['day_of_week']
             logger.info("基本特徴量のみ使用: day_of_week")
         
         # ターゲット変数

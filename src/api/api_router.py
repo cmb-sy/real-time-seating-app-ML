@@ -60,8 +60,10 @@ class APIRouter(BaseHTTPRequestHandler):
             today_weekday = today.weekday()
             tomorrow_weekday = tomorrow.weekday()
             
-            weekday_names = ["月", "火", "水", "木", "金"]
-            
+            # 曜日名を取得するヘルパー関数
+            def get_weekday_name(weekday):
+                weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
+                return weekday_names[weekday]
             
             # 平日がある場合のみモデルをロード
             model_data = None
@@ -75,8 +77,7 @@ class APIRouter(BaseHTTPRequestHandler):
             if today_weekday >= 5:
                 today_prediction = {
                     "occupancy_rate": 0.0,
-                    "occupied_seats": 0,
-                    "note": "土日はデータがありません"
+                    "occupied_seats": 0
                 }
             else:
                 today_prediction = self.generate_prediction_with_ml(model_data, today_weekday)
@@ -85,35 +86,29 @@ class APIRouter(BaseHTTPRequestHandler):
             if tomorrow_weekday >= 5:
                 tomorrow_prediction = {
                     "occupancy_rate": 0.0,
-                    "occupied_seats": 0,
-                    "note": "土日はデータがありません"
+                    "occupied_seats": 0
                 }
             else:
                 tomorrow_prediction = self.generate_prediction_with_ml(model_data, tomorrow_weekday)
             
+            # フロントエンドの型定義に合わせたレスポンス形式
             response_data = {
                 "success": True,
                 "data": {
                     "today": {
-                        "date": today.isoformat(),
-                        "day_of_week": weekday_names[today_weekday],
+                        "weekday": today_weekday,
+                        "weekday_name": get_weekday_name(today_weekday),
                         "occupancy_rate": today_prediction["occupancy_rate"],
                         "occupied_seats": today_prediction["occupied_seats"]
                     },
                     "tomorrow": {
-                        "date": tomorrow.isoformat(),
-                        "day_of_week": weekday_names[tomorrow_weekday],
+                        "weekday": tomorrow_weekday,
+                        "weekday_name": get_weekday_name(tomorrow_weekday),
                         "occupancy_rate": tomorrow_prediction["occupancy_rate"],
                         "occupied_seats": tomorrow_prediction["occupied_seats"]
                     }
                 }
             }
-            
-            # noteがある場合は追加
-            if "note" in today_prediction:
-                response_data["data"]["today"]["note"] = today_prediction["note"]
-            if "note" in tomorrow_prediction:
-                response_data["data"]["tomorrow"]["note"] = tomorrow_prediction["note"]
             
             send_success_response(self, response_data)
             
@@ -150,13 +145,13 @@ class APIRouter(BaseHTTPRequestHandler):
                         'occupied_seats': occupied_seats
                     })
             
-            # 曜日別の平均を計算（平日のみ）
-            weekday_names = ["月", "火", "水", "木", "金"]  # 土日を除外
+            # 曜日名の定義
+            weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
+            
             weekly_averages = {
                 "success": True,
                 "data": {
-                    "weekly_averages": [],
-                    "note": "土日のデータは除外されています（営業日：月-金のみ）"
+                    "weekly_averages": []
                 }
             }
             
@@ -171,20 +166,17 @@ class APIRouter(BaseHTTPRequestHandler):
                     final_occupancy_rate = min(1.0, max(0.0, avg_occupancy))
                     
                     weekly_averages["data"]["weekly_averages"].append({
-                        "day_of_week": day,
-                        "day_name": weekday_names[day],
+                        "weekday": day,
+                        "weekday_name": weekday_names[day],
                         "occupancy_rate": round(final_occupancy_rate, 2),
                         "occupied_seats": final_occupied_seats,
-                        "data_count": len(values)  # データ件数も追加
                     })
                 else:
                     weekly_averages["data"]["weekly_averages"].append({
-                        "day_of_week": day,
-                        "day_name": weekday_names[day],
+                        "weekday": day,
+                        "weekday_name": weekday_names[day],
                         "occupancy_rate": 0.0,
                         "occupied_seats": 0,
-                        "note": "データなし",
-                        "data_count": 0
                     })
             
             send_success_response(self, weekly_averages)
@@ -227,29 +219,91 @@ class APIRouter(BaseHTTPRequestHandler):
             return None
     
     def generate_prediction_with_ml(self, model_data, day_of_week):
-        """曜日別の予測を生成"""
+        """曜日別の予測を生成（簡素化された特徴量エンジニアリング対応）"""
         if day_of_week < 0 or day_of_week > 6:
             raise Exception(f"サポートされていない曜日です: {day_of_week}")
         
         if day_of_week >= 5:
             raise Exception(f"土日（曜日: {day_of_week}）は予測データがありません")
+        
+        # データベースから実際のdensity_seats_ratioの平均値を取得
+        try:
+            supabase = get_supabase_client()
+            if supabase:
+                response = supabase.table('density_history').select('density_rate, occupied_seats').eq('day_of_week', day_of_week).execute()
+                data = response.data
+                
+                if data and len(data) > 0:
+                    # 実際のdensity_seats_ratioを計算
+                    ratios = []
+                    for record in data:
+                        density_rate = record.get('density_rate', 0)
+                        occupied_seats = record.get('occupied_seats', 0)
+                        if occupied_seats > 0:
+                            ratio = (density_rate / 100.0) / (occupied_seats + 1)
+                            ratios.append(ratio)
+                    
+                    avg_density_seats_ratio = sum(ratios) / len(ratios) if ratios else 0.1
+                else:
+                    avg_density_seats_ratio = 0.1  # データがない場合のみフォールバック
+            else:
+                avg_density_seats_ratio = 0.1  # DB接続失敗時のフォールバック
+        except Exception as e:
+            print(f"データベース取得エラー: {e}")
+            avg_density_seats_ratio = 0.1  # エラー時のフォールバック
+        
+        # 簡素化された特徴量を手動で作成（10個の特徴量）
+        try:
+            # 基本的な特徴量を作成
+            features = np.zeros((1, 10))  # 10個の特徴量
             
-        features = np.array([[day_of_week]])
+            # 1. day_of_week
+            features[0, 0] = day_of_week
             
+            # 2. density_seats_ratio（実際のデータから計算）
+            features[0, 1] = avg_density_seats_ratio
+            
+            # 3-7. 曜日ダミー変数
+            features[0, 2] = 1 if day_of_week == 0 else 0  # is_monday
+            features[0, 3] = 1 if day_of_week == 1 else 0  # is_tuesday
+            features[0, 4] = 1 if day_of_week == 2 else 0  # is_wednesday
+            features[0, 5] = 1 if day_of_week == 3 else 0  # is_thursday
+            features[0, 6] = 1 if day_of_week == 4 else 0  # is_friday
+            
+            # 8. is_early_week（月火）
+            features[0, 7] = 1 if day_of_week in [0, 1] else 0
+            
+            # 9. is_mid_week（水）
+            features[0, 8] = 1 if day_of_week == 2 else 0
+            
+            # 10. is_late_week（木金）
+            features[0, 9] = 1 if day_of_week in [3, 4] else 0
+            
+        except Exception as e:
+            print(f"特徴量作成でエラー: {e}")
+            # フォールバック: 10個の特徴量でデフォルト値を使用
+            features = np.zeros((1, 10))
+            features[0, 0] = day_of_week  # 最低限day_of_weekは設定
+            features[0, 1] = avg_density_seats_ratio
+        
         density_model = model_data.get("density_model")
         seats_model = model_data.get("seats_model")
             
         if density_model and seats_model:
-            density_pred = density_model.predict(features)[0]
-            seats_pred = seats_model.predict(features)[0]
-            
-            density_pred = max(0, min(100, density_pred))
-            seats_pred = max(0, min(int(seats_pred), 8))
-            
-            base_prediction = {
-                "density_rate": round(density_pred, 2),
-                "occupied_seats": int(seats_pred)
-            }
+            try:
+                density_pred = density_model.predict(features)[0]
+                seats_pred = seats_model.predict(features)[0]
+                
+                density_pred = max(0, min(100, density_pred))
+                seats_pred = max(0, min(int(seats_pred), 8))
+                
+                base_prediction = {
+                    "density_rate": round(density_pred, 2),
+                    "occupied_seats": int(seats_pred)
+                }
+            except Exception as e:
+                print(f"予測エラー: {e}")
+                raise Exception(f"予測処理でエラーが発生しました: {str(e)}")
         else:
             raise Exception("予測モデルがエラーを返しました")
         

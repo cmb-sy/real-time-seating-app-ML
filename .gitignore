@@ -168,6 +168,10 @@ cython_debug/
 optuna_studies/
 mlruns/
 
+# モデルファイル（APIディレクトリのものは除外しない）
+models/*.joblib
+!src/api/*.joblib
+
 # データファイル
 data/
 *.csv

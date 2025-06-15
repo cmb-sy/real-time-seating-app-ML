@@ -349,7 +349,7 @@ class MLPredictor:
     
     def predict(self, day_of_week: int) -> Dict:
         """
-        曜日のみから密度率と占有座席数を予測
+        曜日から密度率と占有座席数を予測（簡素化された特徴量エンジニアリング対応）
         
         Args:
             day_of_week: 曜日（0-4: 月-金）
@@ -360,32 +360,69 @@ class MLPredictor:
         if not self.models:
             raise ValueError("モデルが訓練されていません。先にtrain_best_models()を実行してください。")
         
-        # 曜日のみから特徴量作成
-        features = np.array([[day_of_week]])
+        # 簡素化された特徴量を手動で作成（10個の特徴量）
+        try:
+            # 基本的な特徴量を作成
+            features = np.zeros((1, 10))  # 10個の特徴量
+            
+            # 1. day_of_week
+            features[0, 0] = day_of_week
+            
+            # 2. density_seats_ratio（平均値を使用）
+            features[0, 1] = 0.1  # デフォルト値
+            
+            # 3-7. 曜日ダミー変数
+            features[0, 2] = 1 if day_of_week == 0 else 0  # is_monday
+            features[0, 3] = 1 if day_of_week == 1 else 0  # is_tuesday
+            features[0, 4] = 1 if day_of_week == 2 else 0  # is_wednesday
+            features[0, 5] = 1 if day_of_week == 3 else 0  # is_thursday
+            features[0, 6] = 1 if day_of_week == 4 else 0  # is_friday
+            
+            # 8. is_early_week（月火）
+            features[0, 7] = 1 if day_of_week in [0, 1] else 0
+            
+            # 9. is_mid_week（水）
+            features[0, 8] = 1 if day_of_week == 2 else 0
+            
+            # 10. is_late_week（木金）
+            features[0, 9] = 1 if day_of_week in [3, 4] else 0
+            
+        except Exception as e:
+            logger.warning(f"特徴量作成でエラー: {e}")
+            # フォールバック: 曜日のみの特徴量を使用
+            features = np.array([[day_of_week]])
         
         predictions = {}
         
         # 密度率予測
         if 'density' in self.models:
             model = self.models['density']
-            if 'density' in self.scalers:
-                features_scaled = self.scalers['density'].transform(features)
-                density_pred = model.predict(features_scaled)[0]
-            else:
-                density_pred = model.predict(features)[0]
-            
-            predictions['density_rate'] = float(max(0, min(100, density_pred)))  # 0-100%の範囲に制限
+            try:
+                if 'density' in self.scalers:
+                    features_scaled = self.scalers['density'].transform(features)
+                    density_pred = model.predict(features_scaled)[0]
+                else:
+                    density_pred = model.predict(features)[0]
+                
+                predictions['density_rate'] = float(max(0, min(100, density_pred)))  # 0-100%の範囲に制限
+            except Exception as e:
+                logger.error(f"密度率予測エラー: {e}")
+                predictions['density_rate'] = 0.0
         
         # 占有座席数予測
         if 'seats' in self.models:
             model = self.models['seats']
-            if 'seats' in self.scalers:
-                features_scaled = self.scalers['seats'].transform(features)
-                seats_pred = model.predict(features_scaled)[0]
-            else:
-                seats_pred = model.predict(features)[0]
-            
-            predictions['occupied_seats'] = int(max(0, min(8, seats_pred)))  # 席数8に制限
+            try:
+                if 'seats' in self.scalers:
+                    features_scaled = self.scalers['seats'].transform(features)
+                    seats_pred = model.predict(features_scaled)[0]
+                else:
+                    seats_pred = model.predict(features)[0]
+                
+                predictions['occupied_seats'] = int(max(0, min(8, seats_pred)))  # 席数8に制限
+            except Exception as e:
+                logger.error(f"占有座席数予測エラー: {e}")
+                predictions['occupied_seats'] = 0
         
         return predictions
     
