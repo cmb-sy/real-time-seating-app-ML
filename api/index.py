@@ -36,48 +36,30 @@ def get_database_prediction(day_of_week):
         response = supabase.table('density_history').select('density_rate, occupied_seats').eq('day_of_week', day_of_week).execute()
         data = response.data
         
-        if data and len(data) > 0:
-            # 過去データの平均を計算
-            total_density = sum(record.get('density_rate', 0) for record in data)
-            total_seats = sum(record.get('occupied_seats', 0) for record in data)
-            count = len(data)
-            
-            avg_density_rate = total_density / count
-            avg_occupied_seats = total_seats / count
-            
-            # 正規化
-            occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
-            occupancy_rate = min(1.0, max(0.0, occupancy_rate))
-            occupied_seats = min(8, max(0, round(avg_occupied_seats)))
-            
-            return {
-                "occupancy_rate": round(occupancy_rate, 2),
-                "occupied_seats": occupied_seats
-            }
-        else:
-            # データがない場合は曜日別のデフォルト値
-            weekday_defaults = {
-                0: {"occupancy_rate": 0.65, "occupied_seats": 5},  # 月曜日
-                1: {"occupancy_rate": 0.75, "occupied_seats": 6},  # 火曜日
-                2: {"occupancy_rate": 0.70, "occupied_seats": 6},  # 水曜日
-                3: {"occupancy_rate": 0.80, "occupied_seats": 6},  # 木曜日
-                4: {"occupancy_rate": 0.60, "occupied_seats": 5},  # 金曜日
-            }
-            
-            return weekday_defaults.get(day_of_week, {"occupancy_rate": 0.5, "occupied_seats": 4})
+        if not data or len(data) == 0:
+            raise Exception(f"曜日{day_of_week}のデータがデータベースに存在しません")
+        
+        # 過去データの平均を計算
+        total_density = sum(record.get('density_rate', 0) for record in data)
+        total_seats = sum(record.get('occupied_seats', 0) for record in data)
+        count = len(data)
+        
+        avg_density_rate = total_density / count
+        avg_occupied_seats = total_seats / count
+        
+        # 正規化
+        occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
+        occupancy_rate = min(1.0, max(0.0, occupancy_rate))
+        occupied_seats = min(8, max(0, round(avg_occupied_seats)))
+        
+        return {
+            "occupancy_rate": round(occupancy_rate, 2),
+            "occupied_seats": occupied_seats
+        }
             
     except Exception as e:
         print(f"データベース予測エラー: {e}")
-        # エラー時は曜日別のデフォルト値
-        weekday_defaults = {
-            0: {"occupancy_rate": 0.65, "occupied_seats": 5},  # 月曜日
-            1: {"occupancy_rate": 0.75, "occupied_seats": 6},  # 火曜日
-            2: {"occupancy_rate": 0.70, "occupied_seats": 6},  # 水曜日
-            3: {"occupancy_rate": 0.80, "occupied_seats": 6},  # 木曜日
-            4: {"occupancy_rate": 0.60, "occupied_seats": 5},  # 金曜日
-        }
-        
-        return weekday_defaults.get(day_of_week, {"occupancy_rate": 0.5, "occupied_seats": 4})
+        raise Exception(f"データベースから予測データを取得できませんでした: {str(e)}")
 
 def handle_today_tomorrow():
     """今日・明日予測API処理"""
