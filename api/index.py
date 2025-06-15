@@ -1,14 +1,16 @@
 """
-統合API - GitHub Workflowで訓練されたモデルとSupabase実データを使用
+統合API - Supabase実データを使用（MLモデルは一時的に無効化）
 """
 import os
 import json
-import joblib
-import numpy as np
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler
 import urllib.request
 import urllib.parse
+
+# MLライブラリは一時的にコメントアウト
+# import joblib
+# import numpy as np
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -47,28 +49,14 @@ class handler(BaseHTTPRequestHandler):
         return supabase_url, supabase_key
     
     def load_trained_models(self):
-        """GitHub Workflowで訓練されたモデルを読み込み"""
-        try:
-            # モデルファイルのパス
-            density_model_path = 'api/density_model.joblib'
-            seats_model_path = 'api/seats_model.joblib'
-            best_params_path = 'api/best_params.joblib'
-            performance_path = 'api/model_performance.joblib'
-            
-            # モデルを読み込み
-            density_model = joblib.load(density_model_path)
-            seats_model = joblib.load(seats_model_path)
-            best_params = joblib.load(best_params_path)
-            performance = joblib.load(performance_path)
-            
-            return {
-                'density_model': density_model,
-                'seats_model': seats_model,
-                'best_params': best_params,
-                'performance': performance
-            }
-        except Exception as e:
-            raise Exception(f"Failed to load trained models: {str(e)}")
+        """GitHub Workflowで訓練されたモデルを読み込み（一時的に無効化）"""
+        # MLモデルの読み込みを一時的に無効化
+        return {
+            'density_model': None,
+            'seats_model': None,
+            'best_params': {'status': 'ML models temporarily disabled'},
+            'performance': {'status': 'ML models temporarily disabled', 'fallback_mode': True}
+        }
     
     def get_supabase_data(self, query_params=""):
         """Supabaseから実データを取得"""
@@ -93,33 +81,9 @@ class handler(BaseHTTPRequestHandler):
             raise Exception(f"Failed to fetch Supabase data: {str(e)}")
     
     def create_features(self, day_of_week, avg_density_seats_ratio):
-        """特徴量を作成（モデル訓練時と同じ10個の特徴量）"""
-        # 基本的な特徴量を作成（10個）
-        features = np.zeros((1, 10))
-        
-        # 1. day_of_week
-        features[0, 0] = day_of_week
-        
-        # 2. density_seats_ratio（実際のデータから計算またはデフォルト値）
-        features[0, 1] = avg_density_seats_ratio
-        
-        # 3-7. 曜日ダミー変数
-        features[0, 2] = 1 if day_of_week == 0 else 0  # is_monday
-        features[0, 3] = 1 if day_of_week == 1 else 0  # is_tuesday
-        features[0, 4] = 1 if day_of_week == 2 else 0  # is_wednesday
-        features[0, 5] = 1 if day_of_week == 3 else 0  # is_thursday
-        features[0, 6] = 1 if day_of_week == 4 else 0  # is_friday
-        
-        # 8. is_early_week（月火）
-        features[0, 7] = 1 if day_of_week in [0, 1] else 0
-        
-        # 9. is_mid_week（水）
-        features[0, 8] = 1 if day_of_week == 2 else 0
-        
-        # 10. is_late_week（木金）
-        features[0, 9] = 1 if day_of_week in [3, 4] else 0
-        
-        return features
+        """特徴量を作成（一時的に無効化）"""
+        # MLモデルが無効化されているため、特徴量作成をスキップ
+        return None
     
     def get_density_seats_ratio(self, day_of_week):
         """Supabaseから実際のdensity_seats_ratioを取得"""
@@ -153,42 +117,17 @@ class handler(BaseHTTPRequestHandler):
             return 0.15  # 15%の密度比率（平均的な値）
     
     def predict_with_models(self, day_of_week):
-        """訓練済みモデルで予測"""
+        """訓練済みモデルで予測（一時的にSupabaseデータのみ使用）"""
+        # MLモデルが無効化されているため、直接データベース平均を使用
         try:
-            models = self.load_trained_models()
-            
-            # 実際のdensity_seats_ratioを取得
-            avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
-            
-            # 特徴量を作成（10個の特徴量）
-            features = self.create_features(day_of_week, avg_density_seats_ratio)
-            
-            # 予測実行
-            density_pred = models['density_model'].predict(features)[0]
-            seats_pred = models['seats_model'].predict(features)[0]
-            
-            # 正規化
-            occupancy_rate = density_pred / 100.0 if density_pred > 1 else density_pred
-            occupancy_rate = min(1.0, max(0.0, occupancy_rate))
-            occupied_seats = min(8, max(0, round(seats_pred)))
-            
-            return {
-                "occupancy_rate": round(occupancy_rate, 2),
-                "occupied_seats": occupied_seats,
-                "model_prediction": True
-            }
-            
+            return self.get_database_average(day_of_week)
         except Exception as e:
-            # モデル予測に失敗した場合はSupabaseデータの平均を使用
-            try:
-                return self.get_database_average(day_of_week)
-            except Exception as fallback_error:
-                # 最終フォールバック: 安全なデフォルト値
-                return {
-                    "occupancy_rate": 0.3,  # 30%の占有率（平日の平均的な値）
-                    "occupied_seats": 2,     # 2席占有（平均的な値）
-                    "model_prediction": False
-                }
+            # 最終フォールバック: 安全なデフォルト値
+            return {
+                "occupancy_rate": 0.3,  # 30%の占有率（平日の平均的な値）
+                "occupied_seats": 2,     # 2席占有（平均的な値）
+                "model_prediction": False
+            }
     
     def get_database_average(self, day_of_week):
         """Supabaseデータから平均を計算（フォールバック）"""
