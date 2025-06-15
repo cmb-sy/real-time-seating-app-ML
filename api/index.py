@@ -192,26 +192,19 @@ class handler(BaseHTTPRequestHandler):
             
             # モデルが利用可能かチェック
             if models['density_model'] is None or models['seats_model'] is None:
-                # モデルが利用できない場合はデータベース平均を使用
-                return self.get_database_average(day_of_week)
+                print("モデルが利用できない")
             
             # 特徴量を作成
             avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
             features = self.create_features(day_of_week, avg_density_seats_ratio)
             
             if features is None:
-                # 特徴量作成に失敗した場合はデータベース平均を使用
-                return self.get_database_average(day_of_week)
-            
-            # 予測実行
-            # 注：特徴量の次元数がモデルの期待する次元数と一致しない場合の対策
+                print("特徴量作成に失敗した")
             try:
                 density_pred = models['density_model'].predict(features)[0]
                 seats_pred = models['seats_model'].predict(features)[0]
             except Exception as model_error:
                 print(f"モデル予測エラー: {str(model_error)}")
-                # 特徴量の次元が合わない場合は、データベース平均を使用
-                return self.get_database_average(day_of_week)
             
             # 予測結果を正規化
             occupancy_rate = max(0.0, min(1.0, density_pred / 100.0 if density_pred > 1 else density_pred))
@@ -225,50 +218,7 @@ class handler(BaseHTTPRequestHandler):
             
         except Exception as e:
             print(f"予測エラー: {str(e)}")
-            # MLモデル予測に失敗した場合はデータベース平均を使用
-            return self.get_database_average(day_of_week)
-    
-    def get_database_average(self, day_of_week):
-        """Supabaseデータから平均を計算"""
-        try:
-            # 指定された曜日のデータを取得
-            data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
-            
-            if not data:
-                data = []
-            
-            # 平均を計算
-            total_density = sum(record.get('density_rate', 0) for record in data)
-            total_seats = sum(record.get('occupied_seats', 0) for record in data)
-            count = len(data)
-            
-            if count == 0:
-                raise Exception("No valid data records found")
-            
-            avg_density_rate = total_density / count
-            avg_occupied_seats = total_seats / count
-            
-            # 正規化
-            occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
-            occupancy_rate = min(1.0, max(0.0, occupancy_rate))
-            occupied_seats = min(8, max(0, round(avg_occupied_seats)))
-            
-            return {
-                "occupancy_rate": round(occupancy_rate, 2),
-                "occupied_seats": occupied_seats,
-                "model_used": False
-            }
-            
-        except Exception as e:
-            print(f"平均計算エラー: {str(e)}")
-            # 最終的なフォールバック
-            return {
-                "occupancy_rate": 0.5,
-                "occupied_seats": 4,
-                "model_used": False,
-                "error": str(e)
-            }
-    
+       
     def handle_today_tomorrow(self):
         """今日・明日予測API"""
         try:
@@ -333,16 +283,27 @@ class handler(BaseHTTPRequestHandler):
             
             # 各平日の予測を計算（データベース平均を使用）
             for day_of_week in range(5):  # 平日のみ（0-4）
-                prediction = self.get_database_average(day_of_week)
+                data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
+                if not data:
+                    print("データがありません")
+                    data = []
+                total_density = sum(record.get('density_rate', 0) for record in data)
+                total_seats = sum(record.get('occupied_seats', 0) for record in data)
+                count = len(data)            
+                avg_density_rate = total_density / count
+                avg_occupied_seats = total_seats / count
                 
+                occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
+                occupancy_rate = min(1.0, max(0.0, occupancy_rate))
+                occupied_seats = min(8, max(0, round(avg_occupied_seats)))
+
                 weekly_averages.append({
                     "weekday": day_of_week,
                     "weekday_name": weekday_names[day_of_week],
-                    "occupancy_rate": prediction["occupancy_rate"],
-                    "occupied_seats": prediction["occupied_seats"]
+                    "occupancy_rate": round(occupancy_rate, 2),
+                    "occupied_seats": occupied_seats
                 })
             
-            # レスポンスデータの構築
             response_data = {
                 "success": True,
                 "data": {
