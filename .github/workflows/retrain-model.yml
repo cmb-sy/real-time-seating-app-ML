@@ -10,7 +10,7 @@ on:
   push:
     paths:
       - "src/ml/**"
-      - "requirements.txt"
+      - "learn_requirements.txt"
 
 jobs:
   retrain-and-update:
