@@ -6,11 +6,12 @@
 **/*.py[cod]
 **/*$py.class
 
-# Virtual environments
+# Virtual environments (最重要: 418MBを除外)
 .venv/
 venv/
 env/
 ENV/
+.env
 
 # IDE files
 .vscode/
@@ -21,23 +22,30 @@ desktop.ini
 
 # Git files
 .git/
+.gitignore
+
+# ML training files (推論には不要)
+src/ml/
+!src/ml/__init__.py
 
 # Data files (exclude training data, keep models)
 data/
-
 frontend_data/
 *.csv
 *.xlsx
 *.db
 *.sqlite3
 
-# Documentation
+# Documentation (README以外)
+documents/
 *.md
 !README.md
 
 # Test files
 *.html
 api_test.html
+test_*.py
+*_test.py
 
 # Jupyter notebooks
 *.ipynb
@@ -50,16 +58,12 @@ api_test.html
 *.gif
 *.svg
 
-# Training scripts (not needed for inference)
+# Training scripts (推論には不要)
 main.py
-ml_models.py
-data_analysis.py
-train_ml_models.py
 scheduler.py
-database.py
 start_server.py
-config.py
 clean_cache.py
+install_minimal.sh
 
 # Temporary files
 *.tmp
@@ -71,6 +75,37 @@ clean_cache.py
 uv.lock
 poetry.lock
 Pipfile.lock
+pyproject.toml
+
+# GitHub Actions (デプロイには不要)
+.github/
+
+# Vercel files
+.vercel/
+
+# Python dependencies (requirements.txtから再インストール)
+site-packages/
+
+# Large libraries (必要最小限のみ残す)
+**/numpy/tests/
+**/pandas/tests/
+**/sklearn/tests/
+**/scipy/tests/
+**/matplotlib/
+**/seaborn/
+**/plotly/
+
+# Development tools
+**/pytest/
+**/black/
+**/flake8/
+**/mypy/
+
+# Unused model files (必要なもののみ残す)
+# *.joblib は残す（APIで必要）
 
 # Public directory
-public/ 
+public/
+
+# Runtime files
+runtime.txt 

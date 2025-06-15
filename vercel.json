@@ -5,7 +5,7 @@
       "src": "src/api/*.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "10mb"
+        "maxLambdaSize": "50mb"
       }
     }
   ],
@@ -34,5 +34,10 @@
       "src": "/api/supabase/sync",
       "dest": "src/api/supabase_sync.py"
     }
-  ]
+  ],
+  "functions": {
+    "src/api/*.py": {
+      "maxDuration": 30
+    }
+  }
 }

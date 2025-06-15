@@ -161,5 +161,32 @@ class handler(BaseHTTPRequestHandler):
             "occupied_seats": actual_occupied_seats
         }
 
+def run_server(port=8080):
+    """
+    ローカルでHTTPサーバーを起動する関数
+    
+    Args:
+        port (int): サーバーのポート番号（デフォルト: 8080）
+    """
+    from http.server import HTTPServer
+    
+    server_address = ('', port)
+    httpd = HTTPServer(server_address, handler)
+    print(f"サーバーを起動しました。http://localhost:{port}/ でアクセスできます。")
+    
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nCtrl+Cが押されました。サーバーを停止します。")
+    finally:
+        httpd.server_close()
+        print("サーバーは停止しました。")
+
 if __name__ == "__main__":
-    handler().do_GET()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='座席予測APIサーバーを起動します')
+    parser.add_argument('--port', type=int, default=8080, help='サーバーのポート番号（デフォルト: 8080）')
+    
+    args = parser.parse_args()
+    run_server(args.port)
