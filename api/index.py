@@ -186,25 +186,33 @@ class handler(BaseHTTPRequestHandler):
     
     def predict_with_models(self, day_of_week):
         """訓練済みモデルで予測"""
+           # ※モデルが利用できない場合はデータベース平均を使用しているから、ただの平均値を返す
         try:
             # モデルを読み込み
             models = self.load_trained_models()
             
             # モデルが利用可能かチェック
             if models['density_model'] is None or models['seats_model'] is None:
-                print("モデルが利用できない")
+                # モデルが利用できない場合はデータベース平均を使用
+                return self.get_database_average(day_of_week)
             
             # 特徴量を作成
             avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
             features = self.create_features(day_of_week, avg_density_seats_ratio)
             
             if features is None:
-                print("特徴量作成に失敗した")
+                # 特徴量作成に失敗した場合はデータベース平均を使用
+                return self.get_database_average(day_of_week)
+            
+            # 予測実行
+            # 注：特徴量の次元数がモデルの期待する次元数と一致しない場合の対策
             try:
                 density_pred = models['density_model'].predict(features)[0]
                 seats_pred = models['seats_model'].predict(features)[0]
             except Exception as model_error:
                 print(f"モデル予測エラー: {str(model_error)}")
+                # 特徴量の次元が合わない場合は、データベース平均を使用
+                return self.get_database_average(day_of_week)
             
             # 予測結果を正規化
             occupancy_rate = max(0.0, min(1.0, density_pred / 100.0 if density_pred > 1 else density_pred))
@@ -218,6 +226,8 @@ class handler(BaseHTTPRequestHandler):
             
         except Exception as e:
             print(f"予測エラー: {str(e)}")
+            # MLモデル予測に失敗した場合はデータベース平均を使用
+            return self.get_database_average(day_of_week)
     
     def get_database_average(self, day_of_week):
         """Supabaseデータから平均を計算"""
@@ -262,7 +272,6 @@ class handler(BaseHTTPRequestHandler):
     
     def handle_today_tomorrow(self):
         """今日・明日予測API"""
-        # ※モデルが利用できない、エラー時の場合はデータベース平均を使用しているから、ただの平均値になる。
         try:
             # 現在の日時を取得
             now = datetime.now()
@@ -330,7 +339,6 @@ class handler(BaseHTTPRequestHandler):
                 weekly_averages.append({
                     "weekday": day_of_week,
                     "weekday_name": weekday_names[day_of_week],
-                    # ※予測値ではなく平均値を返すこと
                     "occupancy_rate": prediction["occupancy_rate"],
                     "occupied_seats": prediction["occupied_seats"]
                 })
