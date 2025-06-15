@@ -16,9 +16,17 @@ jobs:
   retrain-and-update:
     runs-on: ubuntu-latest
 
+    # GitHub Actionsにプッシュ権限を付与
+    permissions:
+      contents: write
+      actions: read
+
     steps:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
+        with:
+          # GITHUB_TOKENを使用してプッシュ権限を確保
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Python環境をセットアップ
         uses: actions/setup-python@v4
@@ -56,7 +64,8 @@ jobs:
             echo "モデルファイルに変更がありません"
           else
             git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')"
-            git push
+            # GITHUB_TOKENを使用してプッシュ
+            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
             echo "✅ モデルファイルを更新しました - Vercelが自動デプロイを開始します"
           fi
 
