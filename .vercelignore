@@ -24,7 +24,7 @@ desktop.ini
 
 # Data files (exclude training data, keep models)
 data/
-plots/
+
 frontend_data/
 *.csv
 *.xlsx

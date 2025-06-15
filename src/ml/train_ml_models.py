@@ -1,12 +1,11 @@
 """
-機械学習モデル訓練スクリプト
-データ分析からモデル訓練まで一括実行
+機械学習モデル構築スクリプト
 """
 
 import logging
 import argparse
 from src.ml.ml_models import MLPredictor
-from src.ml.data_analysis import DataAnalyzer
+from src.ml.data_processor import MLDataProcessor
 
 # ログ設定
 logging.basicConfig(
@@ -15,40 +14,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def run_full_ml_pipeline(n_trials: int = 50, target_type: str = 'both'):
+def run_full_ml_pipeline(n_trials: int = 100, target_type: str = 'both', use_feature_engineering: bool = True):
     """
     機械学習パイプライン全体を実行
     
     Args:
         n_trials: Optunaの最適化試行回数
         target_type: 最適化対象 ('density', 'seats', 'both')
+        use_feature_engineering: 特徴量エンジニアリングを使用するかどうか
     """
     logger.info("=== 機械学習パイプライン開始 ===")
     
-    # 1. データ分析
-    logger.info("1. データ分析を実行中...")
-    analyzer = DataAnalyzer()
+    # 1. データ準備確認
+    logger.info("1. データ準備確認を実行中...")
+    data_processor = MLDataProcessor()
     
     try:
-        # 基本統計
-        basic_stats = analyzer.get_basic_statistics()
-        logger.info(f"データ件数: {basic_stats['全体統計']['レコード数']} 件")
-        logger.info(f"平日データ件数: {basic_stats['平日統計']['レコード数']} 件")
-        
-        # 曜日別分析
-        weekday_analysis = analyzer.analyze_by_weekday()
-        logger.info(f"曜日別分析完了: {len(weekday_analysis)} 曜日のデータ")
-        
-        # 相関分析
-        correlation = analyzer.get_correlation_analysis()
-        logger.info(f"密度率と占有座席数の相関: {correlation['density_occupied_correlation']:.3f}")
-        
-        # 可視化
-        plot_paths = analyzer.create_visualizations()
-        logger.info(f"可視化グラフ作成完了: {len(plot_paths)} 個のグラフ")
+        # データ読み込み確認
+        data_processor.load_data_from_supabase()
+        logger.info("Supabaseからのデータ取得が正常に完了しました")
         
     except Exception as e:
-        logger.error(f"データ分析エラー: {e}")
+        logger.error(f"データ準備エラー: {e}")
         return False
     
     # 2. 機械学習モデル訓練
@@ -56,11 +43,12 @@ def run_full_ml_pipeline(n_trials: int = 50, target_type: str = 'both'):
     predictor = MLPredictor()
     
     try:
-        # ハイパーパラメータ最適化
         logger.info(f"ハイパーパラメータ最適化開始 (試行回数: {n_trials})")
+        logger.info(f"特徴量エンジニアリング: {'有効' if use_feature_engineering else '無効'}")
         optimization_results = predictor.optimize_hyperparameters(
             target_type=target_type,
-            n_trials=n_trials
+            n_trials=n_trials,
+            use_feature_engineering=use_feature_engineering
         )
         
         # 結果表示
@@ -74,7 +62,7 @@ def run_full_ml_pipeline(n_trials: int = 50, target_type: str = 'both'):
         
         # 最適パラメータでモデル訓練
         logger.info("最適パラメータでモデル訓練中...")
-        training_results = predictor.train_best_models()
+        training_results = predictor.train_best_models(use_feature_engineering=use_feature_engineering)
         
         # 結果表示
         if 'density' in training_results:
@@ -184,11 +172,19 @@ def main():
                        help='Optunaの最適化試行回数 (デフォルト: 50)')
     parser.add_argument('--target', choices=['density', 'seats', 'both'], default='both',
                        help='最適化対象 (デフォルト: both)')
+    parser.add_argument('--feature-engineering', action='store_true', default=True,
+                       help='特徴量エンジニアリングを使用する (デフォルト: True)')
+    parser.add_argument('--no-feature-engineering', action='store_false', dest='feature_engineering',
+                       help='特徴量エンジニアリングを無効にする')
     
     args = parser.parse_args()
     
     if args.mode == 'train':
-        success = run_full_ml_pipeline(n_trials=args.n_trials, target_type=args.target)
+        success = run_full_ml_pipeline(
+            n_trials=args.n_trials, 
+            target_type=args.target,
+            use_feature_engineering=args.feature_engineering
+        )
         if success:
             logger.info("✅ 機械学習パイプラインが正常に完了しました")
         else:
