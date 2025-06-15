@@ -14,8 +14,10 @@ import optuna
 import joblib
 import logging
 from typing import Dict, Tuple, List, Any
-from src.ml.data_processor import MLDataProcessor
+from data_processor import MLDataProcessor
 import os
+import sys
+sys.path.append('src/ml')
 
 logger = logging.getLogger(__name__)
 
@@ -426,7 +428,7 @@ class MLPredictor:
         
         return predictions
     
-    def save_models(self, model_dir: str = 'models') -> Dict[str, str]:
+    def save_models(self, model_dir: str = 'api/') -> Dict[str, str]:
         """
         訓練済みモデルを保存
         

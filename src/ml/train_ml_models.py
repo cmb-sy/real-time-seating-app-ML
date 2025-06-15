@@ -2,10 +2,13 @@
 機械学習モデル構築スクリプト
 """
 
+import os
+import sys
 import logging
 import argparse
-from src.ml.ml_models import MLPredictor
-from src.ml.data_processor import MLDataProcessor
+sys.path.append('src/ml') #先に呼ばないとダメ
+from ml_models import MLPredictor
+from data_processor import MLDataProcessor
 
 # ログ設定
 logging.basicConfig(

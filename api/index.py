@@ -2,22 +2,28 @@
 統合API - Supabase実データ専用版
 """
 import os
+import sys
 import json
+import pandas as pd
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler
-import urllib.request
-import urllib.parse
 
-# MLライブラリ（条件付きインポート）
+sys.path.append('src/ml') #先に呼ばないとダメ
+
 try:
     import joblib
     import numpy as np
+    from data_processor import engineer_features, get_feature_columns
     ML_LIBRARIES_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: ML libraries not available: {e}")
     joblib = None
     np = None
     ML_LIBRARIES_AVAILABLE = False
+    engineer_features = None
+    get_feature_columns = None
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -119,12 +125,32 @@ class handler(BaseHTTPRequestHandler):
             raise Exception(f"Failed to fetch Supabase data: {str(e)}")
     
     def create_features(self, day_of_week, avg_density_seats_ratio):
-        """特徴量を作成（10個の特徴量）"""
+        """特徴量を作成（data_processor.pyの関数を使用）"""
         if not ML_LIBRARIES_AVAILABLE or np is None:
             return None
             
         try:
-            # 基本特徴量
+            # データフレームの作成
+            data = {
+                'day_of_week': [day_of_week],
+                'density_rate': [avg_density_seats_ratio * 100],  # 0-100のスケールに変換
+                'occupied_seats': [8 * avg_density_seats_ratio]   # 仮の値（実際のデータから計算すべき）
+            }
+            df = pd.DataFrame(data)
+            
+            # 特徴量エンジニアリングを適用
+            if engineer_features is not None:
+                feature_df = engineer_features(df)
+                
+                # 必要な特徴量を取得
+                if get_feature_columns is not None:
+                    feature_columns = get_feature_columns()
+                    # 存在する特徴量のみを選択
+                    available_features = [col for col in feature_columns if col in feature_df.columns]
+                    X = feature_df[available_features].values
+                    return X
+            
+            # エンジニアリングが使えない場合は旧方式で特徴量を作成
             features = [day_of_week, avg_density_seats_ratio]
             
             # 曜日ダミー変数（月曜日から金曜日まで）
@@ -146,6 +172,7 @@ class handler(BaseHTTPRequestHandler):
             return np.array(features).reshape(1, -1)
             
         except Exception as e:
+            print(f"特徴量作成エラー: {str(e)}")
             return None
     
     def get_density_seats_ratio(self, day_of_week):
@@ -198,19 +225,27 @@ class handler(BaseHTTPRequestHandler):
                 return self.get_database_average(day_of_week)
             
             # 予測実行
-            density_pred = models['density_model'].predict(features)[0]
-            seats_pred = models['seats_model'].predict(features)[0]
+            # 注：特徴量の次元数がモデルの期待する次元数と一致しない場合の対策
+            try:
+                density_pred = models['density_model'].predict(features)[0]
+                seats_pred = models['seats_model'].predict(features)[0]
+            except Exception as model_error:
+                print(f"モデル予測エラー: {str(model_error)}")
+                # 特徴量の次元が合わない場合は、データベース平均を使用
+                return self.get_database_average(day_of_week)
             
             # 予測結果を正規化
-            occupancy_rate = max(0.0, min(1.0, density_pred))
+            occupancy_rate = max(0.0, min(1.0, density_pred / 100.0 if density_pred > 1 else density_pred))
             occupied_seats = max(0, min(8, round(seats_pred)))
             
             return {
                 "occupancy_rate": round(occupancy_rate, 2),
-                "occupied_seats": occupied_seats
+                "occupied_seats": occupied_seats,
+                "model_used": True
             }
             
         except Exception as e:
+            print(f"予測エラー: {str(e)}")
             # MLモデル予測に失敗した場合はデータベース平均を使用
             return self.get_database_average(day_of_week)
     
@@ -221,11 +256,7 @@ class handler(BaseHTTPRequestHandler):
             data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
             if not data:
-                # 指定曜日にデータがない場合、全曜日の平均を使用
-                all_data = self.get_supabase_data("select=density_rate,occupied_seats")
-                if not all_data:
-                    raise Exception("No data available in database")
-                data = all_data
+                data = []
             
             # 平均を計算
             total_density = sum(record.get('density_rate', 0) for record in data)
@@ -246,13 +277,21 @@ class handler(BaseHTTPRequestHandler):
             return {
                 "occupancy_rate": round(occupancy_rate, 2),
                 "occupied_seats": occupied_seats,
+                "model_used": False
             }
             
         except Exception as e:
-            raise Exception(f"Unable to calculate average from database: {str(e)}")
+            print(f"平均計算エラー: {str(e)}")
+            # 最終的なフォールバック
+            return {
+                "occupancy_rate": 0.5,
+                "occupied_seats": 4,
+                "model_used": False,
+                "error": str(e)
+            }
     
     def handle_today_tomorrow(self):
-        """今日・明日予測API（MLモデル使用）"""
+        """今日・明日予測API"""
         try:
             # 現在の日時を取得
             now = datetime.now()
