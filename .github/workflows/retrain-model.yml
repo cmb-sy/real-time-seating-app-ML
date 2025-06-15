@@ -51,10 +51,6 @@ jobs:
           export PYTHONPATH=$GITHUB_WORKSPACE
           python src/ml/train_ml_models.py --mode train
 
-      - name: モデルファイルを開発用APIディレクトリにコピー
-        run: |
-          cp models/*.joblib src/api/
-
       - name: モデルファイルを本番用APIディレクトリにコピー
         run: |
           cp models/*.joblib api/
@@ -64,11 +60,11 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add src/api/*.joblib api/*.joblib
+          git add api/*.joblib
           if git diff --staged --quiet; then
             echo "モデルファイルに変更がありません"
           else
-            git commit -m "🤖 自動モデル更新（開発用・本番用）: $(date '+%Y-%m-%d %H:%M:%S')"
+            git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')"
             # GITHUB_TOKENを使用してプッシュ
             git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
             echo "✅ モデルファイルを更新しました - Vercelが自動デプロイを開始します"
@@ -82,12 +78,6 @@ jobs:
           echo "**実行トリガー**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 更新されたファイル" >> $GITHUB_STEP_SUMMARY
-          echo "**開発用API (src/api/)**:" >> $GITHUB_STEP_SUMMARY
-          echo "- density_model.joblib" >> $GITHUB_STEP_SUMMARY
-          echo "- seats_model.joblib" >> $GITHUB_STEP_SUMMARY
-          echo "- best_params.joblib" >> $GITHUB_STEP_SUMMARY
-          echo "- model_performance.joblib" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**本番用API (api/)**:" >> $GITHUB_STEP_SUMMARY
           echo "- density_model.joblib" >> $GITHUB_STEP_SUMMARY
           echo "- seats_model.joblib" >> $GITHUB_STEP_SUMMARY

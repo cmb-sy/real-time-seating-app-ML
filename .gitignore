@@ -170,7 +170,7 @@ mlruns/
 
 # モデルファイル（APIディレクトリのものは除外しない）
 models/*.joblib
-!src/api/*.joblib
+!api/*.joblib
 
 # データファイル
 data/
@@ -194,4 +194,16 @@ uv.lock
 
 # API keys & config
 config_local.py
-.env.local 
+.env.local
+.env
+.env.production
+.env.development
+*.key
+*.pem
+secrets.json
+
+# Test and debug files
+api/test*.py
+api/env-check.py
+api/simple-test.py
+api/hello.py 

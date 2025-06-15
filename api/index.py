@@ -1,352 +1,344 @@
 """
-Vercel本番環境用API - Vercel標準形式での実装
+統合API - GitHub Workflowで訓練されたモデルとSupabase実データを使用
 """
 import os
 import json
+import joblib
+import numpy as np
 from datetime import datetime, timedelta
-from urllib.parse import urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler
+import urllib.request
+import urllib.parse
 
-# Supabaseクライアント設定
-def get_supabase_client():
-    """Supabaseクライアントを初期化"""
-    try:
-        # 環境変数の詳細チェック
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            # パスを解析してエンドポイントを判定
+            path = self.path
+            
+            if path == '/api/predictions/today-tomorrow':
+                self.handle_today_tomorrow()
+            elif path == '/api/predictions/weekly-average':
+                self.handle_weekly_average()
+            elif path == '/api/model-info':
+                self.handle_model_info()
+            else:
+                self.send_error(404, "Endpoint not found")
+                
+        except Exception as e:
+            self.send_error_response("Internal server error")
+    
+    def do_OPTIONS(self):
+        """CORS preflight request handling"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+    
+    def get_supabase_config(self):
+        """Supabase設定を取得"""
         supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
         supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
         
-        print(f"=== Supabase診断情報 ===")
-        print(f"URL存在: {bool(supabase_url)}")
-        print(f"URL値: {supabase_url[:50] if supabase_url else 'None'}...")
-        print(f"Key存在: {bool(supabase_key)}")
-        print(f"Key値: {supabase_key[:50] if supabase_key else 'None'}...")
-        
-        if not supabase_url:
-            print("❌ NEXT_PUBLIC_SUPABASE_URL が設定されていません")
-            return None
+        if not supabase_url or not supabase_key:
+            raise Exception("Database configuration error")
             
-        if not supabase_key:
-            print("❌ SUPABASE_SERVICE_ROLE_KEY または NEXT_PUBLIC_SUPABASE_ANON_KEY が設定されていません")
-            return None
-        
-        # Supabaseライブラリの動的インポート
+        return supabase_url, supabase_key
+    
+    def load_trained_models(self):
+        """GitHub Workflowで訓練されたモデルを読み込み"""
         try:
-            print("📦 Supabaseライブラリをインポート中...")
-            from supabase import create_client, Client
-            print("✅ Supabaseライブラリのインポートに成功")
-        except ImportError as import_error:
-            print(f"❌ Supabaseライブラリのインポートエラー: {import_error}")
-            return None
-        
-        # Supabaseクライアントの作成
+            # モデルファイルのパス
+            density_model_path = 'api/density_model.joblib'
+            seats_model_path = 'api/seats_model.joblib'
+            best_params_path = 'api/best_params.joblib'
+            performance_path = 'api/model_performance.joblib'
+            
+            # モデルを読み込み
+            density_model = joblib.load(density_model_path)
+            seats_model = joblib.load(seats_model_path)
+            best_params = joblib.load(best_params_path)
+            performance = joblib.load(performance_path)
+            
+            return {
+                'density_model': density_model,
+                'seats_model': seats_model,
+                'best_params': best_params,
+                'performance': performance
+            }
+        except Exception as e:
+            raise Exception(f"Failed to load trained models: {str(e)}")
+    
+    def get_supabase_data(self, query_params=""):
+        """Supabaseから実データを取得"""
         try:
-            print("🔗 Supabaseクライアントを作成中...")
-            supabase: Client = create_client(supabase_url, supabase_key)
-            print("✅ Supabaseクライアントの初期化に成功")
+            supabase_url, supabase_key = self.get_supabase_config()
             
-            # 接続テスト
-            print("🧪 データベース接続テスト中...")
-            test_response = supabase.table('density_history').select('*').limit(1).execute()
-            print(f"✅ データベース接続テストに成功: {len(test_response.data) if test_response.data else 0}件のデータ")
-            
-            return supabase
-        except Exception as client_error:
-            print(f"❌ Supabaseクライアント作成エラー: {client_error}")
-            print(f"エラータイプ: {type(client_error).__name__}")
-            return None
-            
-    except Exception as e:
-        print(f"❌ Supabaseクライアント初期化の全般的エラー: {e}")
-        print(f"エラータイプ: {type(e).__name__}")
-        return None
-
-def get_database_prediction(day_of_week):
-    """データベースから実際のデータを取得して予測"""
-    try:
-        supabase = get_supabase_client()
-        if not supabase:
-            raise Exception("データベース接続失敗")
-        
-        # 該当曜日の過去データを取得
-        response = supabase.table('density_history').select('density_rate, occupied_seats').eq('day_of_week', day_of_week).execute()
-        data = response.data
-        
-        if not data or len(data) == 0:
-            raise Exception(f"曜日{day_of_week}のデータがデータベースに存在しません")
-        
-        # 過去データの平均を計算
-        total_density = sum(record.get('density_rate', 0) for record in data)
-        total_seats = sum(record.get('occupied_seats', 0) for record in data)
-        count = len(data)
-        
-        avg_density_rate = total_density / count
-        avg_occupied_seats = total_seats / count
-        
-        # 正規化
-        occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
-        occupancy_rate = min(1.0, max(0.0, occupancy_rate))
-        occupied_seats = min(8, max(0, round(avg_occupied_seats)))
-        
-        return {
-            "occupancy_rate": round(occupancy_rate, 2),
-            "occupied_seats": occupied_seats
-        }
-            
-    except Exception as e:
-        print(f"データベース予測エラー: {e}")
-        raise Exception(f"データベースから予測データを取得できませんでした: {str(e)}")
-
-def handle_today_tomorrow():
-    """今日・明日予測API処理"""
-    try:
-        # 現在の日時を取得
-        now = datetime.now()
-        today = now.date()
-        tomorrow = today + timedelta(days=1)
-        
-        today_weekday = today.weekday()
-        tomorrow_weekday = tomorrow.weekday()
-        
-        # 曜日名を取得するヘルパー関数
-        def get_weekday_name(weekday):
-            weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
-            return weekday_names[weekday]
-        
-        # 今日の予測
-        if today_weekday >= 5:  # 土日
-            today_prediction = {
-                "occupancy_rate": 0.0,
-                "occupied_seats": 0
+            headers = {
+                'apikey': supabase_key,
+                'Authorization': f'Bearer {supabase_key}',
+                'Content-Type': 'application/json'
             }
-        else:
-            today_prediction = get_database_prediction(today_weekday)
+            
+            url = f"{supabase_url}/rest/v1/density_history?{query_params}"
+            req = urllib.request.Request(url, headers=headers)
+            
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+            
+            return data
+            
+        except Exception as e:
+            raise Exception(f"Failed to fetch Supabase data: {str(e)}")
+    
+    def create_features(self, day_of_week, avg_density_seats_ratio=0.1):
+        """特徴量を作成（モデル訓練時と同じ10個の特徴量）"""
+        # 基本的な特徴量を作成（10個）
+        features = np.zeros((1, 10))
         
-        # 明日の予測
-        if tomorrow_weekday >= 5:  # 土日
-            tomorrow_prediction = {
-                "occupancy_rate": 0.0,
-                "occupied_seats": 0
+        # 1. day_of_week
+        features[0, 0] = day_of_week
+        
+        # 2. density_seats_ratio（実際のデータから計算またはデフォルト値）
+        features[0, 1] = avg_density_seats_ratio
+        
+        # 3-7. 曜日ダミー変数
+        features[0, 2] = 1 if day_of_week == 0 else 0  # is_monday
+        features[0, 3] = 1 if day_of_week == 1 else 0  # is_tuesday
+        features[0, 4] = 1 if day_of_week == 2 else 0  # is_wednesday
+        features[0, 5] = 1 if day_of_week == 3 else 0  # is_thursday
+        features[0, 6] = 1 if day_of_week == 4 else 0  # is_friday
+        
+        # 8. is_early_week（月火）
+        features[0, 7] = 1 if day_of_week in [0, 1] else 0
+        
+        # 9. is_mid_week（水）
+        features[0, 8] = 1 if day_of_week == 2 else 0
+        
+        # 10. is_late_week（木金）
+        features[0, 9] = 1 if day_of_week in [3, 4] else 0
+        
+        return features
+    
+    def get_density_seats_ratio(self, day_of_week):
+        """Supabaseから実際のdensity_seats_ratioを取得"""
+        try:
+            data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
+            
+            if not data:
+                return 0.1  # デフォルト値
+            
+            # 実際のdensity_seats_ratioを計算
+            ratios = []
+            for record in data:
+                density_rate = record.get('density_rate', 0)
+                occupied_seats = record.get('occupied_seats', 0)
+                if occupied_seats > 0:
+                    ratio = (density_rate / 100.0) / (occupied_seats + 1)
+                    ratios.append(ratio)
+            
+            return sum(ratios) / len(ratios) if ratios else 0.1
+            
+        except Exception as e:
+            return 0.1  # エラー時のデフォルト値
+    
+    def predict_with_models(self, day_of_week):
+        """訓練済みモデルで予測"""
+        try:
+            models = self.load_trained_models()
+            
+            # 実際のdensity_seats_ratioを取得
+            avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
+            
+            # 特徴量を作成（10個の特徴量）
+            features = self.create_features(day_of_week, avg_density_seats_ratio)
+            
+            # 予測実行
+            density_pred = models['density_model'].predict(features)[0]
+            seats_pred = models['seats_model'].predict(features)[0]
+            
+            # 正規化
+            occupancy_rate = density_pred / 100.0 if density_pred > 1 else density_pred
+            occupancy_rate = min(1.0, max(0.0, occupancy_rate))
+            occupied_seats = min(8, max(0, round(seats_pred)))
+            
+            return {
+                "occupancy_rate": round(occupancy_rate, 2),
+                "occupied_seats": occupied_seats,
+                "model_prediction": True
             }
-        else:
-            tomorrow_prediction = get_database_prediction(tomorrow_weekday)
-        
-        # フロントエンドの型定義に合わせたレスポンス形式
-        response_data = {
-            "success": True,
-            "data": {
-                "today": {
-                    "weekday": today_weekday,
-                    "weekday_name": get_weekday_name(today_weekday),
-                    "occupancy_rate": today_prediction["occupancy_rate"],
-                    "occupied_seats": today_prediction["occupied_seats"]
-                },
-                "tomorrow": {
-                    "weekday": tomorrow_weekday,
-                    "weekday_name": get_weekday_name(tomorrow_weekday),
-                    "occupancy_rate": tomorrow_prediction["occupancy_rate"],
-                    "occupied_seats": tomorrow_prediction["occupied_seats"]
-                }
-            },
-            "prediction_method": "database",
-            "environment": "production"
-        }
-        
-        return response_data
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"今日・明日予測APIでエラーが発生しました: {str(e)}"
-        }
-
-def handle_weekly_average():
-    """週間平均予測API処理"""
-    try:
-        supabase = get_supabase_client()
-        if not supabase:
-            raise Exception("Supabaseクライアントの初期化に失敗しました")
             
-        # density_historyテーブルから過去のデータを取得
-        response = supabase.table('density_history').select('*').execute()
-        data = response.data
-        
-        if not data or len(data) == 0:
-            raise Exception("データベースにデータが存在しません")
+        except Exception as e:
+            # モデル予測に失敗した場合はSupabaseデータの平均を使用
+            return self.get_database_average(day_of_week)
+    
+    def get_database_average(self, day_of_week):
+        """Supabaseデータから平均を計算（フォールバック）"""
+        try:
+            data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
-        # 曜日別に集計（0-4: 月-金のみ、土日は除外）
-        day_of_week_data = {i: [] for i in range(5)}  # 平日のみ（0-4）
-        
-        for record in data:
-            day_of_week = record.get('day_of_week')
-            density_rate = record.get('density_rate', 0)
-            occupied_seats = record.get('occupied_seats', 0)
+            if not data:
+                return {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
             
-            # 土日（5, 6）のデータは除外し、平日（0-4）のみ処理
-            if day_of_week is not None and 0 <= day_of_week <= 4:
-                occupancy_rate = density_rate / 100.0 if density_rate > 1 else density_rate
-                day_of_week_data[day_of_week].append({
-                    'occupancy_rate': occupancy_rate,
-                    'occupied_seats': occupied_seats
-                })
-        
-        # 曜日名の定義
-        weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
-        
-        weekly_averages = {
-            "success": True,
-            "data": {
-                "weekly_averages": []
+            # 平均を計算
+            total_density = sum(record.get('density_rate', 0) for record in data)
+            total_seats = sum(record.get('occupied_seats', 0) for record in data)
+            count = len(data)
+            
+            avg_density_rate = total_density / count
+            avg_occupied_seats = total_seats / count
+            
+            # 正規化
+            occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
+            occupancy_rate = min(1.0, max(0.0, occupancy_rate))
+            occupied_seats = min(8, max(0, round(avg_occupied_seats)))
+            
+            return {
+                "occupancy_rate": round(occupancy_rate, 2),
+                "occupied_seats": occupied_seats,
+                "model_prediction": False
             }
-        }
-        
-        # 平日（0-4）のみ処理
-        for day in range(5):  # 0-4の平日のみ
-            values = day_of_week_data[day]
-            if values:
-                avg_occupancy = sum(v['occupancy_rate'] for v in values) / len(values)
-                avg_occupied_seats = sum(v['occupied_seats'] for v in values) / len(values)
-                
-                final_occupied_seats = min(8, max(0, round(avg_occupied_seats)))
-                final_occupancy_rate = min(1.0, max(0.0, avg_occupancy))
-                
-                weekly_averages["data"]["weekly_averages"].append({
-                    "weekday": day,
-                    "weekday_name": weekday_names[day],
-                    "occupancy_rate": round(final_occupancy_rate, 2),
-                    "occupied_seats": final_occupied_seats,
-                })
+            
+        except Exception as e:
+            return {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
+    
+    def handle_today_tomorrow(self):
+        """今日・明日予測API"""
+        try:
+            # 現在の日時を取得
+            now = datetime.now()
+            today = now.date()
+            tomorrow = today + timedelta(days=1)
+            
+            today_weekday = today.weekday()
+            tomorrow_weekday = tomorrow.weekday()
+            
+            # 曜日名を取得するヘルパー関数
+            def get_weekday_name(weekday):
+                weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
+                return weekday_names[weekday]
+            
+            # 今日の予測
+            if today_weekday >= 5:  # 土日
+                today_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
             else:
-                weekly_averages["data"]["weekly_averages"].append({
-                    "weekday": day,
-                    "weekday_name": weekday_names[day],
-                    "occupancy_rate": 0.0,
-                    "occupied_seats": 0,
-                })
-        
-        return weekly_averages
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"週間平均予測APIでエラーが発生しました: {str(e)}"
-        }
-
-def handle_database_test():
-    """データベース接続テスト用のエンドポイント"""
-    try:
-        supabase = get_supabase_client()
-        if not supabase:
-            raise Exception("データベース接続失敗")
-        
-        # 既存データの取得テスト（読み取り専用）
-        response = supabase.table('density_history').select('*').limit(5).execute()
-        
-        return {
-            "success": True,
-            "message": "データベース接続テストに成功しました",
-            "data_count": len(response.data) if response.data else 0,
-            "sample_data": response.data if response.data else []
-        }
+                today_prediction = self.predict_with_models(today_weekday)
             
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"データベース接続テストでエラーが発生しました: {str(e)}"
-        }
-
-def create_response(data, status_code=200):
-    """レスポンスオブジェクトを作成"""
-    return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization, Origin, Accept, X-Requested-With',
-            'Access-Control-Max-Age': '86400'
-        },
-        'body': json.dumps(data, ensure_ascii=False)
-    }
-
-def handler(request, context=None):
-    """Vercel用のメインハンドラー関数"""
-    try:
-        # リクエストオブジェクトの構造を確認
-        print(f"🔍 リクエストオブジェクト: {type(request)}")
-        print(f"🔍 リクエスト内容: {request}")
-        
-        # Vercelのリクエスト形式に対応
-        if hasattr(request, 'method'):
-            method = request.method
-            path = getattr(request, 'path', getattr(request, 'url', '/'))
-        else:
-            method = request.get('httpMethod', request.get('method', 'GET'))
-            path = request.get('path', request.get('rawPath', '/'))
-        
-        print(f"🔍 受信したリクエスト: method={method}, path={path}")
-        
-        # OPTIONSリクエスト（プリフライト）の処理
-        if method == 'OPTIONS':
-            return create_response({"message": "CORS preflight"}, 200)
-        
-        # GETリクエストの処理
-        if method == 'GET':
-            # パスに基づいてエンドポイントを判定
-            if 'today-tomorrow' in path:
-                print("📊 今日・明日予測APIを実行")
-                response_data = handle_today_tomorrow()
-            elif 'weekly-average' in path:
-                print("📈 週間平均予測APIを実行")
-                response_data = handle_weekly_average()
-            elif 'test-db' in path:
-                print("🧪 データベーステストAPIを実行")
-                response_data = handle_database_test()
-            elif path == '/' or path == '':
-                print("🏠 ルートエンドポイントを実行")
-                response_data = {
-                    "success": True,
-                    "message": "リアルタイム座席予測API",
-                    "version": "3.0.0",
-                    "endpoints": {
-                        "today_tomorrow": "/api/predictions/today-tomorrow",
-                        "weekly_average": "/api/predictions/weekly-average",
-                        "database_test": "/api/test-db"
+            # 明日の予測
+            if tomorrow_weekday >= 5:  # 土日
+                tomorrow_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
+            else:
+                tomorrow_prediction = self.predict_with_models(tomorrow_weekday)
+            
+            # レスポンスデータの構築
+            response_data = {
+                "success": True,
+                "data": {
+                    "today": {
+                        "weekday": today_weekday,
+                        "weekday_name": get_weekday_name(today_weekday),
+                        "occupancy_rate": today_prediction["occupancy_rate"],
+                        "occupied_seats": today_prediction["occupied_seats"],
+                        "model_prediction": today_prediction["model_prediction"]
                     },
-                    "status": "運用中",
-                    "environment": "production",
-                    "received_path": path,
-                    "request_type": str(type(request))
-                }
-            else:
-                print(f"❌ 未知のエンドポイント: {path}")
-                response_data = {
-                    "success": False,
-                    "error": f"エンドポイントが見つかりません: {path}",
-                    "available_endpoints": [
-                        "/api/predictions/today-tomorrow",
-                        "/api/predictions/weekly-average",
-                        "/api/test-db"
-                    ],
-                    "received_path": path,
-                    "request_debug": str(request)[:500]
-                }
-                return create_response(response_data, 404)
+                    "tomorrow": {
+                        "weekday": tomorrow_weekday,
+                        "weekday_name": get_weekday_name(tomorrow_weekday),
+                        "occupancy_rate": tomorrow_prediction["occupancy_rate"],
+                        "occupied_seats": tomorrow_prediction["occupied_seats"],
+                        "model_prediction": tomorrow_prediction["model_prediction"]
+                    }
+                },
+                "prediction_method": "trained_model_with_supabase_fallback",
+                "environment": "production"
+            }
             
-            # 成功レスポンス
-            status_code = 200 if response_data.get("success", False) else 500
-            return create_response(response_data, status_code)
+            self.send_json_response(response_data)
+            
+        except Exception as e:
+            self.send_error_response("Internal server error")
+    
+    def handle_weekly_average(self):
+        """週間平均予測API"""
+        try:
+            # 曜日名の定義
+            weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
+            
+            weekly_averages = []
+            
+            # 各平日の予測を計算
+            for day_of_week in range(5):  # 平日のみ（0-4）
+                prediction = self.predict_with_models(day_of_week)
+                
+                weekly_averages.append({
+                    "weekday": day_of_week,
+                    "weekday_name": weekday_names[day_of_week],
+                    "occupancy_rate": prediction["occupancy_rate"],
+                    "occupied_seats": prediction["occupied_seats"],
+                    "model_prediction": prediction["model_prediction"]
+                })
+            
+            # レスポンスデータの構築
+            response_data = {
+                "success": True,
+                "data": {
+                    "weekly_averages": weekly_averages
+                },
+                "prediction_method": "trained_model_with_supabase_fallback",
+                "environment": "production"
+            }
+            
+            self.send_json_response(response_data)
+            
+        except Exception as e:
+            self.send_error_response("Internal server error")
+    
+    def handle_model_info(self):
+        """モデル情報API"""
+        try:
+            models = self.load_trained_models()
+            
+            response_data = {
+                "success": True,
+                "data": {
+                    "model_parameters": models['best_params'],
+                    "model_performance": models['performance'],
+                    "model_files": {
+                        "density_model": "api/density_model.joblib",
+                        "seats_model": "api/seats_model.joblib",
+                        "best_params": "api/best_params.joblib",
+                        "performance": "api/model_performance.joblib"
+                    }
+                },
+                "environment": "production"
+            }
+            
+            self.send_json_response(response_data)
+            
+        except Exception as e:
+            self.send_error_response("Internal server error")
+    
+    def send_json_response(self, data, status_code=200):
+        """JSON レスポンスを送信"""
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
         
-        # サポートされていないメソッド
-        return create_response({
-            "success": False,
-            "error": f"サポートされていないHTTPメソッド: {method}"
-        }, 405)
+        self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+    
+    def send_error_response(self, error_message, status_code=500):
+        """エラーレスポンスを送信"""
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
         
-    except Exception as e:
-        print(f"❌ ハンドラーエラー: {e}")
         error_response = {
             "success": False,
-            "error": f"サーバーエラーが発生しました: {str(e)}",
-            "environment": "production",
-            "request_debug": str(request)[:500] if 'request' in locals() else "unknown"
+            "error": error_message
         }
-        return create_response(error_response, 500) 
+        self.wfile.write(json.dumps(error_response).encode('utf-8')) 
