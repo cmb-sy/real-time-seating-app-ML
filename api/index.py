@@ -150,27 +150,6 @@ class handler(BaseHTTPRequestHandler):
                     X = feature_df[available_features].values
                     return X
             
-            # エンジニアリングが使えない場合は旧方式で特徴量を作成
-            features = [day_of_week, avg_density_seats_ratio]
-            
-            # 曜日ダミー変数（月曜日から金曜日まで）
-            is_monday = 1 if day_of_week == 0 else 0
-            is_tuesday = 1 if day_of_week == 1 else 0
-            is_wednesday = 1 if day_of_week == 2 else 0
-            is_thursday = 1 if day_of_week == 3 else 0
-            is_friday = 1 if day_of_week == 4 else 0
-            
-            features.extend([is_monday, is_tuesday, is_wednesday, is_thursday, is_friday])
-            
-            # 週の分類特徴量
-            is_early_week = 1 if day_of_week in [0, 1] else 0  # 月火
-            is_mid_week = 1 if day_of_week == 2 else 0         # 水
-            is_late_week = 1 if day_of_week in [3, 4] else 0   # 木金
-            
-            features.extend([is_early_week, is_mid_week, is_late_week])
-            
-            return np.array(features).reshape(1, -1)
-            
         except Exception as e:
             print(f"特徴量作成エラー: {str(e)}")
             return None
