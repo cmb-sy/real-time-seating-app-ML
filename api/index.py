@@ -92,7 +92,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             raise Exception(f"Failed to fetch Supabase data: {str(e)}")
     
-    def create_features(self, day_of_week, avg_density_seats_ratio=0.1):
+    def create_features(self, day_of_week, avg_density_seats_ratio):
         """特徴量を作成（モデル訓練時と同じ10個の特徴量）"""
         # 基本的な特徴量を作成（10個）
         features = np.zeros((1, 10))
@@ -124,10 +124,15 @@ class handler(BaseHTTPRequestHandler):
     def get_density_seats_ratio(self, day_of_week):
         """Supabaseから実際のdensity_seats_ratioを取得"""
         try:
+            # 指定された曜日のデータを取得
             data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
             if not data:
-                return 0.1  # デフォルト値
+                # 指定曜日にデータがない場合、全曜日の平均を使用
+                all_data = self.get_supabase_data("select=density_rate,occupied_seats")
+                if not all_data:
+                    raise Exception("No data available in database")
+                data = all_data
             
             # 実際のdensity_seats_ratioを計算
             ratios = []
@@ -138,10 +143,13 @@ class handler(BaseHTTPRequestHandler):
                     ratio = (density_rate / 100.0) / (occupied_seats + 1)
                     ratios.append(ratio)
             
-            return sum(ratios) / len(ratios) if ratios else 0.1
+            if not ratios:
+                raise Exception("No valid ratio data found")
+                
+            return sum(ratios) / len(ratios)
             
         except Exception as e:
-            return 0.1  # エラー時のデフォルト値
+            raise Exception(f"Failed to get density_seats_ratio from database: {str(e)}")
     
     def predict_with_models(self, day_of_week):
         """訓練済みモデルで予測"""
@@ -176,15 +184,23 @@ class handler(BaseHTTPRequestHandler):
     def get_database_average(self, day_of_week):
         """Supabaseデータから平均を計算（フォールバック）"""
         try:
+            # 指定された曜日のデータを取得
             data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
             if not data:
-                return {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
+                # 指定曜日にデータがない場合、全曜日の平均を使用
+                all_data = self.get_supabase_data("select=density_rate,occupied_seats")
+                if not all_data:
+                    raise Exception("No data available in database")
+                data = all_data
             
             # 平均を計算
             total_density = sum(record.get('density_rate', 0) for record in data)
             total_seats = sum(record.get('occupied_seats', 0) for record in data)
             count = len(data)
+            
+            if count == 0:
+                raise Exception("No valid data records found")
             
             avg_density_rate = total_density / count
             avg_occupied_seats = total_seats / count
@@ -201,7 +217,7 @@ class handler(BaseHTTPRequestHandler):
             }
             
         except Exception as e:
-            return {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
+            raise Exception(f"Failed to get database average: {str(e)}")
     
     def handle_today_tomorrow(self):
         """今日・明日予測API"""
