@@ -8,9 +8,16 @@ from http.server import BaseHTTPRequestHandler
 import urllib.request
 import urllib.parse
 
-# MLライブラリ（最適化されたバージョン）
-import joblib
-import numpy as np
+# MLライブラリ（条件付きインポート）
+try:
+    import joblib
+    import numpy as np
+    ML_LIBRARIES_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: ML libraries not available: {e}")
+    joblib = None
+    np = None
+    ML_LIBRARIES_AVAILABLE = False
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -50,6 +57,15 @@ class handler(BaseHTTPRequestHandler):
     
     def load_trained_models(self):
         """GitHub Workflowで訓練されたモデルを読み込み"""
+        # MLライブラリが利用できない場合は即座にフォールバック
+        if not ML_LIBRARIES_AVAILABLE or joblib is None:
+            return {
+                'density_model': None,
+                'seats_model': None,
+                'best_params': {'status': 'ML libraries not available', 'error_type': 'ImportError'},
+                'performance': {'status': 'ML libraries not available', 'fallback_mode': True}
+            }
+        
         try:
             import os
             
@@ -110,6 +126,10 @@ class handler(BaseHTTPRequestHandler):
     
     def create_features(self, day_of_week, avg_density_seats_ratio):
         """特徴量を作成（10個の特徴量）"""
+        # MLライブラリが利用できない場合はNoneを返す
+        if not ML_LIBRARIES_AVAILABLE or np is None:
+            return None
+            
         try:
             # 基本特徴量
             features = [day_of_week, avg_density_seats_ratio]
