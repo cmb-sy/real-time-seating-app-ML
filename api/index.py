@@ -4,7 +4,6 @@
 import os
 import sys
 import json
-import pandas as pd
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
@@ -15,6 +14,7 @@ sys.path.append('src/ml') #先に呼ばないとダメ
 try:
     import joblib
     import numpy as np
+    import pandas as pd
     from data_processor import engineer_features, get_feature_columns
     ML_LIBRARIES_AVAILABLE = True
 except ImportError as e:

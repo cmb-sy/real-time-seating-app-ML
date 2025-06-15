@@ -126,11 +126,8 @@ class MLDataProcessor:
         self.df = None
         self.df_weekdays = None
         # Supabaseクライアント
-        supabase_url = "https://howmdafbaqrbyzbcpazk.supabase.co"
-        supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhvd21kYWZiYXFyYnl6YmNwYXprIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODc0MDk0NiwiZXhwIjoyMDY0MzE2OTQ2fQ.45czt-j0AxR679-1Vhz6IERiQxozT8hQqgKVpU3RpBM"
-        
-        # supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-        # supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         
         if not supabase_url or not supabase_key:
             logger.error(f"環境変数が見つかりません: URL={supabase_url}, KEY={'設定あり' if supabase_key else 'なし'}")
