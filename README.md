@@ -81,7 +81,7 @@ npm install -g vercel
 `.env`ファイルを作成し、以下を設定：
 
 ```env
-SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_URL=your_NEXT_PUBLIC_SUPABASE_URL
 SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
@@ -248,7 +248,7 @@ src/
 vercel --prod
 
 # 環境変数を設定
-vercel env add SUPABASE_URL
+vercel env add NEXT_PUBLIC_SUPABASE_URL
 vercel env add SUPABASE_ANON_KEY
 ```
 

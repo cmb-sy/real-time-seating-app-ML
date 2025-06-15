@@ -240,8 +240,8 @@ src/
 ## 環境変数
 
 ```
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=your-anon-key
 ```
 
 ## エラーハンドリング
