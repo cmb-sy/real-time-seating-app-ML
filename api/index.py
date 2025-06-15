@@ -139,33 +139,29 @@ def handle_root():
 
 # Vercel用のメインハンドラー関数
 def handler(request):
-    """Vercel用のメインハンドラー"""
+    """Vercel用のメインハンドラー関数"""
     try:
-        # リクエストURLからパスを取得
-        url = getattr(request, 'url', '/')
+        # リクエストメソッドとURLを取得
         method = getattr(request, 'method', 'GET')
+        url = getattr(request, 'url', '/')
         
         # URLからパスを抽出
-        if hasattr(request, 'url'):
-            parsed_url = urlparse(request.url)
-            path = parsed_url.path
-        else:
-            path = '/'
+        parsed_url = urlparse(url)
+        path = parsed_url.path
         
         # CORS ヘッダーを設定
-        headers = {
-            'Content-Type': 'application/json',
+        cors_headers = {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization, Origin, Accept, X-Requested-With',
             'Access-Control-Max-Age': '86400'
         }
         
-        # OPTIONSリクエストの処理
+        # OPTIONSリクエストの処理（プリフライト）
         if method == 'OPTIONS':
             return {
                 'statusCode': 200,
-                'headers': headers,
+                'headers': cors_headers,
                 'body': ''
             }
         
@@ -186,9 +182,15 @@ def handler(request):
                 ]
             }
         
+        # レスポンスヘッダーにCORSとContent-Typeを追加
+        response_headers = {
+            'Content-Type': 'application/json',
+            **cors_headers
+        }
+        
         return {
             'statusCode': 200,
-            'headers': headers,
+            'headers': response_headers,
             'body': json.dumps(response_data, ensure_ascii=False)
         }
         
@@ -206,8 +208,9 @@ def handler(request):
             "error": f"サーバーエラー: {str(e)}",
             "debug_info": {
                 "error_type": type(e).__name__,
-                "request_method": getattr(request, 'method', 'unknown'),
-                "request_url": getattr(request, 'url', 'unknown')
+                "request_method": method,
+                "request_url": url,
+                "path": path
             }
         }
         
