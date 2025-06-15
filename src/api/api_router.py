@@ -50,7 +50,7 @@ class APIRouter(BaseHTTPRequestHandler):
             send_error_response(self, f"リクエスト処理中にエラーが発生しました: {str(e)}")
     
     def handle_today_tomorrow_direct(self):
-        """今日・明日予測APIの直接処理（高速化）"""
+        """今日・明日予測API処理"""
         try:
             # 現在の日時を取得
             now = datetime.now()
@@ -116,7 +116,7 @@ class APIRouter(BaseHTTPRequestHandler):
             send_error_response(self, f"今日・明日予測APIでエラーが発生しました: {str(e)}")
     
     def handle_weekly_average_direct(self):
-        """週間平均予測APIの直接処理（高速化）- 土日データ除外"""
+        """週間平均予測APIの直接処理"""
         try:
             supabase = get_supabase_client()
             if not supabase:
