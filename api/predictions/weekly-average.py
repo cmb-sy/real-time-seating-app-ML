@@ -1,27 +1,52 @@
 """
-週間平均予測API - Vercel個別エンドポイント
+週間平均予測API - 直接HTTP接続版
 """
 import os
 import json
+import urllib.request
+import urllib.parse
 from http.server import BaseHTTPRequestHandler
 
-def get_supabase_client():
-    """Supabaseクライアントを初期化"""
+def get_all_supabase_data_direct():
+    """直接HTTP接続でSupabaseから全データを取得"""
     try:
+        # 環境変数の取得
         supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
         supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
         
         if not supabase_url or not supabase_key:
-            print("❌ Supabase環境変数が設定されていません")
-            return None
+            raise Exception("環境変数が設定されていません")
         
-        from supabase import create_client, Client
-        supabase: Client = create_client(supabase_url, supabase_key)
-        return supabase
+        # Supabase REST APIエンドポイント
+        api_url = f"{supabase_url}/rest/v1/density_history"
         
+        # クエリパラメータ（全データを取得）
+        query_params = urllib.parse.urlencode({
+            'select': '*'
+        })
+        
+        # HTTPリクエストヘッダー
+        headers = {
+            'apikey': supabase_key,
+            'Authorization': f'Bearer {supabase_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        # HTTPリクエストの作成
+        req = urllib.request.Request(
+            url=f"{api_url}?{query_params}",
+            headers=headers,
+            method='GET'
+        )
+        
+        # リクエストの実行
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return data
+            
     except Exception as e:
-        print(f"❌ Supabaseクライアント初期化エラー: {e}")
-        return None
+        print(f"データベース取得エラー: {e}")
+        raise Exception(f"データベースからデータを取得できませんでした: {str(e)}")
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -36,13 +61,8 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         """週間平均予測API処理"""
         try:
-            supabase = get_supabase_client()
-            if not supabase:
-                raise Exception("Supabaseクライアントの初期化に失敗しました")
-                
-            # density_historyテーブルから過去のデータを取得
-            response = supabase.table('density_history').select('*').execute()
-            data = response.data
+            # データベースから全データを取得
+            data = get_all_supabase_data_direct()
             
             if not data or len(data) == 0:
                 raise Exception("データベースにデータが存在しません")

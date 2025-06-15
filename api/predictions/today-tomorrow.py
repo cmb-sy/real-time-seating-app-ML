@@ -1,57 +1,70 @@
 """
-今日・明日予測API - Vercel個別エンドポイント
+今日・明日予測API - 直接HTTP接続版
 """
 import os
 import json
+import urllib.request
+import urllib.parse
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler
 
-def get_supabase_client():
-    """Supabaseクライアントを初期化"""
+def get_supabase_data_direct(day_of_week):
+    """直接HTTP接続でSupabaseからデータを取得"""
     try:
+        # 環境変数の取得
         supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
         supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
         
         if not supabase_url or not supabase_key:
-            print("❌ Supabase環境変数が設定されていません")
-            return None
+            raise Exception("環境変数が設定されていません")
         
-        from supabase import create_client, Client
-        supabase: Client = create_client(supabase_url, supabase_key)
-        return supabase
+        # Supabase REST APIエンドポイント
+        api_url = f"{supabase_url}/rest/v1/density_history"
         
-    except Exception as e:
-        print(f"❌ Supabaseクライアント初期化エラー: {e}")
-        return None
-
-def get_database_prediction(day_of_week):
-    """データベースから実際のデータを取得して予測"""
-    try:
-        supabase = get_supabase_client()
-        if not supabase:
-            raise Exception("データベース接続失敗")
+        # クエリパラメータ
+        query_params = urllib.parse.urlencode({
+            'select': 'density_rate,occupied_seats',
+            'day_of_week': f'eq.{day_of_week}'
+        })
         
-        response = supabase.table('density_history').select('density_rate, occupied_seats').eq('day_of_week', day_of_week).execute()
-        data = response.data
-        
-        if not data or len(data) == 0:
-            raise Exception(f"曜日{day_of_week}のデータがデータベースに存在しません")
-        
-        total_density = sum(record.get('density_rate', 0) for record in data)
-        total_seats = sum(record.get('occupied_seats', 0) for record in data)
-        count = len(data)
-        
-        avg_density_rate = total_density / count
-        avg_occupied_seats = total_seats / count
-        
-        occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
-        occupancy_rate = min(1.0, max(0.0, occupancy_rate))
-        occupied_seats = min(8, max(0, round(avg_occupied_seats)))
-        
-        return {
-            "occupancy_rate": round(occupancy_rate, 2),
-            "occupied_seats": occupied_seats
+        # HTTPリクエストヘッダー
+        headers = {
+            'apikey': supabase_key,
+            'Authorization': f'Bearer {supabase_key}',
+            'Content-Type': 'application/json'
         }
+        
+        # HTTPリクエストの作成
+        req = urllib.request.Request(
+            url=f"{api_url}?{query_params}",
+            headers=headers,
+            method='GET'
+        )
+        
+        # リクエストの実行
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            
+            if not data or len(data) == 0:
+                raise Exception(f"曜日{day_of_week}のデータがデータベースに存在しません")
+            
+            # 平均計算
+            total_density = sum(record.get('density_rate', 0) for record in data)
+            total_seats = sum(record.get('occupied_seats', 0) for record in data)
+            count = len(data)
+            
+            avg_density_rate = total_density / count
+            avg_occupied_seats = total_seats / count
+            
+            # 正規化
+            occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
+            occupancy_rate = min(1.0, max(0.0, occupancy_rate))
+            occupied_seats = min(8, max(0, round(avg_occupied_seats)))
+            
+            return {
+                "occupancy_rate": round(occupancy_rate, 2),
+                "occupied_seats": occupied_seats
+            }
             
     except Exception as e:
         print(f"データベース予測エラー: {e}")
@@ -90,7 +103,7 @@ class handler(BaseHTTPRequestHandler):
                     "occupied_seats": 0
                 }
             else:
-                today_prediction = get_database_prediction(today_weekday)
+                today_prediction = get_supabase_data_direct(today_weekday)
             
             # 明日の予測
             if tomorrow_weekday >= 5:  # 土日
@@ -99,7 +112,7 @@ class handler(BaseHTTPRequestHandler):
                     "occupied_seats": 0
                 }
             else:
-                tomorrow_prediction = get_database_prediction(tomorrow_weekday)
+                tomorrow_prediction = get_supabase_data_direct(tomorrow_weekday)
             
             # フロントエンドの型定義に合わせたレスポンス形式
             response_data = {
@@ -118,7 +131,7 @@ class handler(BaseHTTPRequestHandler):
                         "occupied_seats": tomorrow_prediction["occupied_seats"]
                     }
                 },
-                "prediction_method": "database",
+                "prediction_method": "database_direct_http",
                 "environment": "production"
             }
             
