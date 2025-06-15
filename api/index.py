@@ -1,5 +1,5 @@
 """
-統合API - Supabase実データ専用版
+統合API - Supabase実データ専用版（修正版）
 """
 import os
 import sys
@@ -9,7 +9,7 @@ import urllib.request
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler
 
-sys.path.append('src/ml') #先に呼ばないとダメ
+sys.path.append('src/ml')
 
 try:
     import joblib
@@ -133,8 +133,8 @@ class handler(BaseHTTPRequestHandler):
             # データフレームの作成
             data = {
                 'day_of_week': [day_of_week],
-                'density_rate': [avg_density_seats_ratio * 100],  # 0-100のスケールに変換
-                'occupied_seats': [8 * avg_density_seats_ratio]   # 仮の値（実際のデータから計算すべき）
+                'density_rate': [avg_density_seats_ratio * 100],
+                'occupied_seats': [8 * avg_density_seats_ratio]
             }
             df = pd.DataFrame(data)
             
@@ -149,6 +149,8 @@ class handler(BaseHTTPRequestHandler):
                     available_features = [col for col in feature_columns if col in feature_df.columns]
                     X = feature_df[available_features].values
                     return X
+            
+            return None
             
         except Exception as e:
             print(f"特徴量作成エラー: {str(e)}")
@@ -186,43 +188,40 @@ class handler(BaseHTTPRequestHandler):
     
     def predict_with_models(self, day_of_week):
         """訓練済みモデルで予測"""
+        # モデルを読み込み
+        models = self.load_trained_models()
+        
+        # モデルが利用可能かチェック
+        if models['density_model'] is None or models['seats_model'] is None:
+            raise Exception("ML models are not available")
+        
+        # 特徴量を作成
+        avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
+        features = self.create_features(day_of_week, avg_density_seats_ratio)
+        
+        if features is None:
+            raise Exception("Feature creation failed")
+        
+        # 予測実行
         try:
-            # モデルを読み込み
-            models = self.load_trained_models()
-            
-            # モデルが利用可能かチェック
-            if models['density_model'] is None or models['seats_model'] is None:
-                print("モデルが利用できない")
-            
-            # 特徴量を作成
-            avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
-            features = self.create_features(day_of_week, avg_density_seats_ratio)
-            
-            if features is None:
-                print("特徴量作成に失敗した")
-            try:
-                density_pred = models['density_model'].predict(features)[0]
-                seats_pred = models['seats_model'].predict(features)[0]
-            except Exception as model_error:
-                print(f"モデル予測エラー: {str(model_error)}")
-            
-            # 予測結果を正規化
-            occupancy_rate = max(0.0, min(1.0, density_pred / 100.0 if density_pred > 1 else density_pred))
-            occupied_seats = max(0, min(8, round(seats_pred)))
-            
-            return {
-                "occupancy_rate": round(occupancy_rate, 2),
-                "occupied_seats": occupied_seats,
-                "model_used": True
-            }
-            
-        except Exception as e:
-            print(f"予測エラー: {str(e)}")
-       
+            density_pred = models['density_model'].predict(features)[0]
+            seats_pred = models['seats_model'].predict(features)[0]
+        except Exception as model_error:
+            raise Exception(f"Model prediction failed: {str(model_error)}")
+        
+        # 予測結果を正規化
+        occupancy_rate = max(0.0, min(1.0, density_pred / 100.0 if density_pred > 1 else density_pred))
+        occupied_seats = max(0, min(8, round(seats_pred)))
+        
+        return {
+            "occupancy_rate": round(occupancy_rate, 2),
+            "occupied_seats": occupied_seats,
+            "model_used": True
+        }
+    
     def handle_today_tomorrow(self):
         """今日・明日予測API"""
         try:
-            # 現在の日時を取得
             now = datetime.now()
             today = now.date()
             tomorrow = today + timedelta(days=1)
@@ -230,24 +229,30 @@ class handler(BaseHTTPRequestHandler):
             today_weekday = today.weekday()
             tomorrow_weekday = tomorrow.weekday()
             
-            # 曜日名を取得するヘルパー関数
             def get_weekday_name(weekday):
                 weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
                 return weekday_names[weekday]
             
-            # 今日の予測（MLモデル使用）
+            # 今日の予測
             if today_weekday >= 5:  # 土日
                 today_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
             else:
-                today_prediction = self.predict_with_models(today_weekday)
+                try:
+                    today_prediction = self.predict_with_models(today_weekday)
+                except Exception as e:
+                    self.send_error_response(f"Failed to predict today's data: {str(e)}")
+                    return
             
-            # 明日の予測（MLモデル使用）
+            # 明日の予測
             if tomorrow_weekday >= 5:  # 土日
                 tomorrow_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
             else:
-                tomorrow_prediction = self.predict_with_models(tomorrow_weekday)
+                try:
+                    tomorrow_prediction = self.predict_with_models(tomorrow_weekday)
+                except Exception as e:
+                    self.send_error_response(f"Failed to predict tomorrow's data: {str(e)}")
+                    return
             
-            # レスポンスデータの構築
             response_data = {
                 "success": True,
                 "data": {
@@ -271,32 +276,34 @@ class handler(BaseHTTPRequestHandler):
             self.send_json_response(response_data)
             
         except Exception as e:
-            self.send_error_response("Failed to get predictions from database")
+            self.send_error_response(f"Failed to get predictions: {str(e)}")
     
     def handle_weekly_average(self):
-        """週間平均予測API（データベース平均使用）"""
+        """週間平均予測API"""
         try:
-            # 曜日名の定義
             weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
-            
             weekly_averages = []
             
-            # 各平日の予測を計算（データベース平均を使用）
-            for day_of_week in range(5):  # 平日のみ（0-4）
+            for day_of_week in range(5):  # 平日のみ
                 data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
+                
                 if not data:
-                    print("データがありません")
-                    data = []
+                    raise Exception(f"No data found for weekday {day_of_week} ({weekday_names[day_of_week]})")
+                
                 total_density = sum(record.get('density_rate', 0) for record in data)
                 total_seats = sum(record.get('occupied_seats', 0) for record in data)
-                count = len(data)            
+                count = len(data)
+                
+                if count == 0:
+                    raise Exception(f"No valid records found for weekday {day_of_week} ({weekday_names[day_of_week]})")
+                
                 avg_density_rate = total_density / count
                 avg_occupied_seats = total_seats / count
                 
                 occupancy_rate = avg_density_rate / 100.0 if avg_density_rate > 1 else avg_density_rate
                 occupancy_rate = min(1.0, max(0.0, occupancy_rate))
                 occupied_seats = min(8, max(0, round(avg_occupied_seats)))
-
+                
                 weekly_averages.append({
                     "weekday": day_of_week,
                     "weekday_name": weekday_names[day_of_week],
@@ -316,7 +323,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_json_response(response_data)
             
         except Exception as e:
-            self.send_error_response("Failed to calculate weekly averages from database")
+            self.send_error_response(f"Failed to calculate weekly averages: {str(e)}")
     
     def handle_model_info(self):
         """モデル情報API"""
