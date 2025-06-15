@@ -42,34 +42,33 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> $GITHUB_ENV
-          # SUPABASE_SERVICE_ROLE_KEYが設定されていればそれを使用、なければSUPABASE_SERVICE_ROLE_KEYを使用
-          if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" >> $GITHUB_ENV
-          elif [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" >> $GITHUB_ENV
-          fi
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" >> $GITHUB_ENV
 
       - name: 機械学習モデルを訓練
         run: |
           export PYTHONPATH=$GITHUB_WORKSPACE
           python src/ml/train_ml_models.py --mode train
 
-      - name: モデルファイルをAPIディレクトリにコピー
+      - name: モデルファイルを開発用APIディレクトリにコピー
         run: |
           cp models/*.joblib src/api/
+
+      - name: モデルファイルを本番用APIディレクトリにコピー
+        run: |
+          cp models/*.joblib api/
+          echo "✅ 本番用APIディレクトリにモデルファイルをコピーしました"
 
       - name: モデルファイルをコミット・プッシュ
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add src/api/*.joblib
+          git add src/api/*.joblib api/*.joblib
           if git diff --staged --quiet; then
             echo "モデルファイルに変更がありません"
           else
-            git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')"
+            git commit -m "🤖 自動モデル更新（開発用・本番用）: $(date '+%Y-%m-%d %H:%M:%S')"
             # GITHUB_TOKENを使用してプッシュ
             git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
             echo "✅ モデルファイルを更新しました - Vercelが自動デプロイを開始します"
@@ -83,13 +82,20 @@ jobs:
           echo "**実行トリガー**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 更新されたファイル" >> $GITHUB_STEP_SUMMARY
+          echo "**開発用API (src/api/)**:" >> $GITHUB_STEP_SUMMARY
+          echo "- density_model.joblib" >> $GITHUB_STEP_SUMMARY
+          echo "- seats_model.joblib" >> $GITHUB_STEP_SUMMARY
+          echo "- best_params.joblib" >> $GITHUB_STEP_SUMMARY
+          echo "- model_performance.joblib" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**本番用API (api/)**:" >> $GITHUB_STEP_SUMMARY
           echo "- density_model.joblib" >> $GITHUB_STEP_SUMMARY
           echo "- seats_model.joblib" >> $GITHUB_STEP_SUMMARY
           echo "- best_params.joblib" >> $GITHUB_STEP_SUMMARY
           echo "- model_performance.joblib" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 デプロイ状況" >> $GITHUB_STEP_SUMMARY
-          echo "Vercelが自動的にデプロイを開始します" >> $GITHUB_STEP_SUMMARY
+          echo "Vercelが自動的に本番環境にデプロイを開始します" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ⏰ 次回実行予定" >> $GITHUB_STEP_SUMMARY
           echo "毎週月曜日 午前2時（UTC）" >> $GITHUB_STEP_SUMMARY
