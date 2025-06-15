@@ -1,5 +1,5 @@
 """
-統合API - Supabase実データを使用（MLモデル復旧版）
+統合API - Supabase実データ専用版
 """
 import os
 import json
@@ -22,7 +22,6 @@ except ImportError as e:
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # パスを解析してエンドポイントを判定
             path = self.path
             
             if path == '/api/predictions/today-tomorrow':
@@ -56,19 +55,15 @@ class handler(BaseHTTPRequestHandler):
         return supabase_url, supabase_key
     
     def load_trained_models(self):
-        """GitHub Workflowで訓練されたモデルを読み込み"""
-        # MLライブラリが利用できない場合は即座にフォールバック
         if not ML_LIBRARIES_AVAILABLE or joblib is None:
             return {
                 'density_model': None,
                 'seats_model': None,
-                'best_params': {'status': 'ML libraries not available', 'error_type': 'ImportError'},
-                'performance': {'status': 'ML libraries not available', 'fallback_mode': True}
+                'best_params': {'status': 'ML libraries not available'},
+                'performance': {'status': 'ML libraries not available'}
             }
         
         try:
-            import os
-            
             # モデルファイルのパス
             density_model_path = 'api/density_model.joblib'
             seats_model_path = 'api/seats_model.joblib'
@@ -94,12 +89,11 @@ class handler(BaseHTTPRequestHandler):
             }
             
         except Exception as e:
-            # モデル読み込みに失敗した場合はフォールバックモードに
             return {
                 'density_model': None,
                 'seats_model': None,
-                'best_params': {'status': f'Model loading failed: {str(e)}', 'error_type': type(e).__name__},
-                'performance': {'status': f'Model loading failed: {str(e)}', 'fallback_mode': True}
+                'best_params': {'status': f'Model loading failed: {str(e)}'},
+                'performance': {'status': f'Model loading failed: {str(e)}'}
             }
     
     def get_supabase_data(self, query_params=""):
@@ -126,7 +120,6 @@ class handler(BaseHTTPRequestHandler):
     
     def create_features(self, day_of_week, avg_density_seats_ratio):
         """特徴量を作成（10個の特徴量）"""
-        # MLライブラリが利用できない場合はNoneを返す
         if not ML_LIBRARIES_AVAILABLE or np is None:
             return None
             
@@ -143,7 +136,7 @@ class handler(BaseHTTPRequestHandler):
             
             features.extend([is_monday, is_tuesday, is_wednesday, is_thursday, is_friday])
             
-            # 週の分類特徴量（元の訓練データと同じロジック）
+            # 週の分類特徴量
             is_early_week = 1 if day_of_week in [0, 1] else 0  # 月火
             is_mid_week = 1 if day_of_week == 2 else 0         # 水
             is_late_week = 1 if day_of_week in [3, 4] else 0   # 木金
@@ -153,7 +146,6 @@ class handler(BaseHTTPRequestHandler):
             return np.array(features).reshape(1, -1)
             
         except Exception as e:
-            # 特徴量作成に失敗した場合はNoneを返す
             return None
     
     def get_density_seats_ratio(self, day_of_week):
@@ -184,11 +176,10 @@ class handler(BaseHTTPRequestHandler):
             return sum(ratios) / len(ratios)
             
         except Exception as e:
-            # 最終フォールバック: 統計的に妥当なデフォルト値
-            return 0.15  # 15%の密度比率（平均的な値）
+            raise Exception(f"Unable to calculate density ratio from database: {str(e)}")
     
     def predict_with_models(self, day_of_week):
-        """訓練済みモデルで予測（MLモデル使用）"""
+        """訓練済みモデルで予測"""
         try:
             # モデルを読み込み
             models = self.load_trained_models()
@@ -224,7 +215,7 @@ class handler(BaseHTTPRequestHandler):
             return self.get_database_average(day_of_week)
     
     def get_database_average(self, day_of_week):
-        """Supabaseデータから平均を計算（フォールバック）"""
+        """Supabaseデータから平均を計算"""
         try:
             # 指定された曜日のデータを取得
             data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
@@ -258,11 +249,7 @@ class handler(BaseHTTPRequestHandler):
             }
             
         except Exception as e:
-            # 最終フォールバック: 統計的に妥当なデフォルト値
-            return {
-                "occupancy_rate": 0.3,  # 30%の占有率
-                "occupied_seats": 2,     # 2席占有
-            }
+            raise Exception(f"Unable to calculate average from database: {str(e)}")
     
     def handle_today_tomorrow(self):
         """今日・明日予測API（MLモデル使用）"""
@@ -316,17 +303,17 @@ class handler(BaseHTTPRequestHandler):
             self.send_json_response(response_data)
             
         except Exception as e:
-            self.send_error_response("Internal server error")
+            self.send_error_response("Failed to get predictions from database")
     
     def handle_weekly_average(self):
-        """週間平均予測API（単純平均使用）"""
+        """週間平均予測API（データベース平均使用）"""
         try:
             # 曜日名の定義
             weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
             
             weekly_averages = []
             
-            # 各平日の予測を計算（単純平均を使用）
+            # 各平日の予測を計算（データベース平均を使用）
             for day_of_week in range(5):  # 平日のみ（0-4）
                 prediction = self.get_database_average(day_of_week)
                 
@@ -350,7 +337,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_json_response(response_data)
             
         except Exception as e:
-            self.send_error_response("Internal server error")
+            self.send_error_response("Failed to calculate weekly averages from database")
     
     def handle_model_info(self):
         """モデル情報API"""
@@ -375,7 +362,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_json_response(response_data)
             
         except Exception as e:
-            self.send_error_response("Internal server error")
+            self.send_error_response("Failed to load model information")
     
     def send_json_response(self, data, status_code=200):
         """JSON レスポンスを送信"""
@@ -399,4 +386,4 @@ class handler(BaseHTTPRequestHandler):
             "success": False,
             "error": error_message
         }
-        self.wfile.write(json.dumps(error_response).encode('utf-8')) 
+        self.wfile.write(json.dumps(error_response).encode('utf-8'))
