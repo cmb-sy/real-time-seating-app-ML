@@ -10,19 +10,38 @@ from http.server import BaseHTTPRequestHandler
 def get_supabase_client():
     """Supabaseクライアントを初期化"""
     try:
-        from supabase import create_client, Client
+        # Supabaseライブラリの動的インポート
+        try:
+            from supabase import create_client, Client
+        except ImportError as import_error:
+            print(f"Supabaseライブラリのインポートエラー: {import_error}")
+            return None
         
+        # 環境変数の取得と検証
         supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
         supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
         
-        if not supabase_url or not supabase_key:
-            print(f"Supabase環境変数が設定されていません")
+        print(f"環境変数チェック - URL存在: {bool(supabase_url)}, Key存在: {bool(supabase_key)}")
+        
+        if not supabase_url:
+            print("NEXT_PUBLIC_SUPABASE_URL が設定されていません")
             return None
             
-        supabase: Client = create_client(supabase_url, supabase_key)
-        return supabase
+        if not supabase_key:
+            print("SUPABASE_SERVICE_ROLE_KEY または NEXT_PUBLIC_SUPABASE_ANON_KEY が設定されていません")
+            return None
+        
+        # Supabaseクライアントの作成
+        try:
+            supabase: Client = create_client(supabase_url, supabase_key)
+            print("Supabaseクライアントの初期化に成功しました")
+            return supabase
+        except Exception as client_error:
+            print(f"Supabaseクライアント作成エラー: {client_error}")
+            return None
+            
     except Exception as e:
-        print(f"Supabaseクライアント初期化エラー: {e}")
+        print(f"Supabaseクライアント初期化の全般的エラー: {e}")
         return None
 
 def get_database_prediction(day_of_week):
@@ -196,6 +215,29 @@ def handle_weekly_average():
             "error": f"週間平均予測APIでエラーが発生しました: {str(e)}"
         }
 
+def handle_database_test():
+    """データベース接続テスト用のエンドポイント"""
+    try:
+        supabase = get_supabase_client()
+        if not supabase:
+            raise Exception("データベース接続失敗")
+        
+        # 既存データの取得テスト（読み取り専用）
+        response = supabase.table('density_history').select('*').limit(5).execute()
+        
+        return {
+            "success": True,
+            "message": "データベース接続テストに成功しました",
+            "data_count": len(response.data) if response.data else 0,
+            "sample_data": response.data if response.data else []
+        }
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"データベース接続テストでエラーが発生しました: {str(e)}"
+        }
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """プリフライトリクエストへの対応"""
@@ -219,6 +261,8 @@ class handler(BaseHTTPRequestHandler):
                 response_data = handle_today_tomorrow()
             elif path == "/api/predictions/weekly-average":
                 response_data = handle_weekly_average()
+            elif path == "/api/test-db":
+                response_data = handle_database_test()
             elif path == "/":
                 response_data = {
                     "success": True,
@@ -226,7 +270,8 @@ class handler(BaseHTTPRequestHandler):
                     "version": "2.0.0",
                     "endpoints": {
                         "today_tomorrow": "/api/predictions/today-tomorrow",
-                        "weekly_average": "/api/predictions/weekly-average"
+                        "weekly_average": "/api/predictions/weekly-average",
+                        "database_test": "/api/test-db"
                     },
                     "status": "運用中",
                     "environment": "production"
@@ -237,7 +282,8 @@ class handler(BaseHTTPRequestHandler):
                     "error": f"エンドポイントが見つかりません: {path}",
                     "available_endpoints": [
                         "/api/predictions/today-tomorrow",
-                        "/api/predictions/weekly-average"
+                        "/api/predictions/weekly-average",
+                        "/api/test-db"
                     ]
                 }
             
