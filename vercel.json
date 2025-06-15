@@ -5,7 +5,8 @@
       "src": "src/api/api_router.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "50mb"
+        "maxLambdaSize": "50mb",
+        "pipInstallArgs": "-r requirements-vercel.txt"
       }
     }
   ],

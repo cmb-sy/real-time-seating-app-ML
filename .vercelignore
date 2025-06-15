@@ -6,7 +6,7 @@
 **/*.py[cod]
 **/*$py.class
 
-# Virtual environments (最重要: 418MBを除外)
+# Virtual environments (最重要: 406MBを除外)
 .venv/
 venv/
 env/
@@ -27,6 +27,9 @@ desktop.ini
 # ML training files (推論には不要)
 src/ml/
 !src/ml/__init__.py
+
+# Models directory (src/api/に必要なもののみ)
+models/
 
 # Data files (exclude training data, keep models)
 data/
@@ -86,7 +89,7 @@ pyproject.toml
 # Python dependencies (requirements.txtから再インストール)
 site-packages/
 
-# Large libraries (必要最小限のみ残す)
+# 大きなライブラリのドキュメント・テスト・例
 **/numpy/tests/
 **/pandas/tests/
 **/sklearn/tests/
@@ -94,6 +97,17 @@ site-packages/
 **/matplotlib/
 **/seaborn/
 **/plotly/
+**/docs/
+**/doc/
+**/documentation/
+**/examples/
+**/example/
+**/tests/
+**/test/
+**/*test*/
+**/*tests*/
+**/benchmarks/
+**/benchmark/
 
 # Development tools
 **/pytest/
@@ -101,11 +115,34 @@ site-packages/
 **/flake8/
 **/mypy/
 
-# Unused model files (必要なもののみ残す)
-# *.joblib は残す（APIで必要）
+# 不要なPythonライブラリ（APIには不要）
+**/optuna/
+**/jupyter/
+**/notebook/
+**/ipython/
+
+# 大きなライブラリの不要な部分
+**/scipy/sparse/linalg/dsolve/linsolve/
+**/scipy/sparse/linalg/eigen/
+**/numpy/f2py/
+**/numpy/distutils/
+**/sklearn/datasets/
+**/sklearn/feature_extraction/
+**/sklearn/feature_selection/
 
 # Public directory
 public/
 
 # Runtime files
-runtime.txt 
+runtime.txt
+
+# 追加の除外（サイズ削減）
+**/*.so
+**/*.dylib
+**/*.dll
+**/locale/
+**/locales/
+**/__pycache__/
+**/site-packages/pip/
+**/site-packages/setuptools/
+**/site-packages/wheel/ 
