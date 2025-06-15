@@ -1,11 +1,10 @@
 """
-Vercel本番環境用API - シンプルで確実に動作する実装
+Vercel本番環境用API - Vercel標準形式での実装
 """
 import os
 import json
 from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler
-import sys
+from urllib.parse import urlparse, parse_qs
 
 # Supabaseクライアント設定
 def get_supabase_client():
@@ -20,7 +19,6 @@ def get_supabase_client():
         print(f"URL値: {supabase_url[:50] if supabase_url else 'None'}...")
         print(f"Key存在: {bool(supabase_key)}")
         print(f"Key値: {supabase_key[:50] if supabase_key else 'None'}...")
-        print(f"環境変数一覧: {list(os.environ.keys())}")
         
         if not supabase_url:
             print("❌ NEXT_PUBLIC_SUPABASE_URL が設定されていません")
@@ -255,135 +253,100 @@ def handle_database_test():
             "error": f"データベース接続テストでエラーが発生しました: {str(e)}"
         }
 
-def handle_diagnostic():
-    """詳細診断エンドポイント"""
-    try:
-        diagnostic_info = {
-            "success": True,
-            "environment": "production",
-            "python_version": f"{sys.version}",
-            "environment_variables": {
-                "NEXT_PUBLIC_SUPABASE_URL": bool(os.environ.get('NEXT_PUBLIC_SUPABASE_URL')),
-                "SUPABASE_SERVICE_ROLE_KEY": bool(os.environ.get('SUPABASE_SERVICE_ROLE_KEY')),
-                "NEXT_PUBLIC_SUPABASE_ANON_KEY": bool(os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')),
-                "VERCEL": os.environ.get('VERCEL'),
-                "all_env_keys": list(os.environ.keys())
-            },
-            "supabase_test": None
-        }
-        
-        # Supabaseライブラリテスト
-        try:
-            from supabase import create_client, Client
-            diagnostic_info["supabase_library"] = "✅ インポート成功"
-            
-            # 環境変数取得
-            supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
-            supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
-            
-            if supabase_url and supabase_key:
-                # クライアント作成テスト
-                supabase = create_client(supabase_url, supabase_key)
-                diagnostic_info["supabase_client"] = "✅ クライアント作成成功"
-                
-                # データベース接続テスト
-                response = supabase.table('density_history').select('*').limit(1).execute()
-                diagnostic_info["supabase_test"] = {
-                    "status": "✅ 接続成功",
-                    "data_count": len(response.data) if response.data else 0
-                }
-            else:
-                diagnostic_info["supabase_test"] = "❌ 環境変数が不足"
-                
-        except ImportError as e:
-            diagnostic_info["supabase_library"] = f"❌ インポートエラー: {str(e)}"
-        except Exception as e:
-            diagnostic_info["supabase_test"] = f"❌ 接続エラー: {str(e)}"
-        
-        return diagnostic_info
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"診断エラー: {str(e)}"
-        }
+def create_response(data, status_code=200):
+    """レスポンスオブジェクトを作成"""
+    return {
+        'statusCode': status_code,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, Origin, Accept, X-Requested-With',
+            'Access-Control-Max-Age': '86400'
+        },
+        'body': json.dumps(data, ensure_ascii=False)
+    }
 
-class handler(BaseHTTPRequestHandler):
-    def do_OPTIONS(self):
-        """プリフライトリクエストへの対応"""
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept, X-Requested-With")
-        self.send_header("Access-Control-Max-Age", "86400")
-        self.end_headers()
-    
-    def do_GET(self):
-        """GETリクエスト処理"""
-        try:
-            path = self.path
-            
-            # パス正規化
-            if path.startswith("/predictions/"):
-                path = "/api" + path
-            
-            if path == "/api/predictions/today-tomorrow":
+def handler(request, context=None):
+    """Vercel用のメインハンドラー関数"""
+    try:
+        # リクエストオブジェクトの構造を確認
+        print(f"🔍 リクエストオブジェクト: {type(request)}")
+        print(f"🔍 リクエスト内容: {request}")
+        
+        # Vercelのリクエスト形式に対応
+        if hasattr(request, 'method'):
+            method = request.method
+            path = getattr(request, 'path', getattr(request, 'url', '/'))
+        else:
+            method = request.get('httpMethod', request.get('method', 'GET'))
+            path = request.get('path', request.get('rawPath', '/'))
+        
+        print(f"🔍 受信したリクエスト: method={method}, path={path}")
+        
+        # OPTIONSリクエスト（プリフライト）の処理
+        if method == 'OPTIONS':
+            return create_response({"message": "CORS preflight"}, 200)
+        
+        # GETリクエストの処理
+        if method == 'GET':
+            # パスに基づいてエンドポイントを判定
+            if 'today-tomorrow' in path:
+                print("📊 今日・明日予測APIを実行")
                 response_data = handle_today_tomorrow()
-            elif path == "/api/predictions/weekly-average":
+            elif 'weekly-average' in path:
+                print("📈 週間平均予測APIを実行")
                 response_data = handle_weekly_average()
-            elif path == "/api/test-db":
+            elif 'test-db' in path:
+                print("🧪 データベーステストAPIを実行")
                 response_data = handle_database_test()
-            elif path == "/api/diagnostic":
-                response_data = handle_diagnostic()
-            elif path == "/":
+            elif path == '/' or path == '':
+                print("🏠 ルートエンドポイントを実行")
                 response_data = {
                     "success": True,
                     "message": "リアルタイム座席予測API",
-                    "version": "2.0.0",
+                    "version": "3.0.0",
                     "endpoints": {
                         "today_tomorrow": "/api/predictions/today-tomorrow",
                         "weekly_average": "/api/predictions/weekly-average",
-                        "database_test": "/api/test-db",
-                        "diagnostic": "/api/diagnostic"
+                        "database_test": "/api/test-db"
                     },
                     "status": "運用中",
-                    "environment": "production"
+                    "environment": "production",
+                    "received_path": path,
+                    "request_type": str(type(request))
                 }
             else:
+                print(f"❌ 未知のエンドポイント: {path}")
                 response_data = {
                     "success": False,
                     "error": f"エンドポイントが見つかりません: {path}",
                     "available_endpoints": [
                         "/api/predictions/today-tomorrow",
                         "/api/predictions/weekly-average",
-                        "/api/test-db",
-                        "/api/diagnostic"
-                    ]
+                        "/api/test-db"
+                    ],
+                    "received_path": path,
+                    "request_debug": str(request)[:500]
                 }
+                return create_response(response_data, 404)
             
-            # レスポンス送信
-            status_code = 200 if response_data.get("success", False) else 404
-            self.send_response(status_code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept, X-Requested-With")
-            self.end_headers()
-            self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode("utf-8"))
-                
-        except Exception as e:
-            error_response = {
-                "success": False,
-                "error": f"リクエスト処理中にエラーが発生しました: {str(e)}",
-                "environment": "production",
-                "debug_info": {
-                    "error_type": type(e).__name__,
-                    "path": getattr(self, "path", "unknown")
-                }
-            }
-            
-            self.send_response(500)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(json.dumps(error_response, ensure_ascii=False).encode("utf-8")) 
+            # 成功レスポンス
+            status_code = 200 if response_data.get("success", False) else 500
+            return create_response(response_data, status_code)
+        
+        # サポートされていないメソッド
+        return create_response({
+            "success": False,
+            "error": f"サポートされていないHTTPメソッド: {method}"
+        }, 405)
+        
+    except Exception as e:
+        print(f"❌ ハンドラーエラー: {e}")
+        error_response = {
+            "success": False,
+            "error": f"サーバーエラーが発生しました: {str(e)}",
+            "environment": "production",
+            "request_debug": str(request)[:500] if 'request' in locals() else "unknown"
+        }
+        return create_response(error_response, 500) 
