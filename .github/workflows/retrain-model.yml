@@ -51,24 +51,15 @@ jobs:
           export PYTHONPATH=$GITHUB_WORKSPACE
           python src/ml/train_ml_models.py --mode train
 
-      - name: モデルファイルを本番用APIディレクトリにコピー
-        run: |
-          cp models/*.joblib api/
-          echo "✅ 本番用APIディレクトリにモデルファイルをコピーしました"
-
       - name: モデルファイルをコミット・プッシュ
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add api/*.joblib
-          if git diff --staged --quiet; then
-            echo "モデルファイルに変更がありません"
-          else
-            git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')"
-            # GITHUB_TOKENを使用してプッシュ
-            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
-            echo "✅ モデルファイルを更新しました - Vercelが自動デプロイを開始します"
-          fi
+          git add .
+          git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')"
+          # GITHUB_TOKENを使用してプッシュ
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+          echo "✅ モデルファイルを更新しました - Vercelが自動デプロイを開始します"
 
       - name: 完了通知
         run: |
