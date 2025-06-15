@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler
 import urllib.request
 import urllib.parse
 
-# MLライブラリを復旧
+# MLライブラリ（最適化されたバージョン）
 import joblib
 import numpy as np
 
@@ -51,11 +51,18 @@ class handler(BaseHTTPRequestHandler):
     def load_trained_models(self):
         """GitHub Workflowで訓練されたモデルを読み込み"""
         try:
+            import os
+            
             # モデルファイルのパス
             density_model_path = 'api/density_model.joblib'
             seats_model_path = 'api/seats_model.joblib'
             best_params_path = 'api/best_params.joblib'
             performance_path = 'api/model_performance.joblib'
+            
+            # ファイル存在確認
+            for path in [density_model_path, seats_model_path, best_params_path, performance_path]:
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"Model file not found: {path}")
             
             # モデルを読み込み
             density_model = joblib.load(density_model_path)
@@ -75,8 +82,8 @@ class handler(BaseHTTPRequestHandler):
             return {
                 'density_model': None,
                 'seats_model': None,
-                'best_params': {'status': 'Model loading failed, using fallback'},
-                'performance': {'status': 'Model loading failed, using fallback', 'fallback_mode': True}
+                'best_params': {'status': f'Model loading failed: {str(e)}', 'error_type': type(e).__name__},
+                'performance': {'status': f'Model loading failed: {str(e)}', 'fallback_mode': True}
             }
     
     def get_supabase_data(self, query_params=""):
