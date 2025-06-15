@@ -1,5 +1,5 @@
 """
-統合API - Supabase実データを使用（MLモデルは一時的に無効化）
+統合API - Supabase実データを使用（MLモデル復旧版）
 """
 import os
 import json
@@ -8,9 +8,9 @@ from http.server import BaseHTTPRequestHandler
 import urllib.request
 import urllib.parse
 
-# MLライブラリは一時的にコメントアウト
-# import joblib
-# import numpy as np
+# MLライブラリを復旧
+import joblib
+import numpy as np
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -49,14 +49,35 @@ class handler(BaseHTTPRequestHandler):
         return supabase_url, supabase_key
     
     def load_trained_models(self):
-        """GitHub Workflowで訓練されたモデルを読み込み（一時的に無効化）"""
-        # MLモデルの読み込みを一時的に無効化
-        return {
-            'density_model': None,
-            'seats_model': None,
-            'best_params': {'status': 'ML models temporarily disabled'},
-            'performance': {'status': 'ML models temporarily disabled', 'fallback_mode': True}
-        }
+        """GitHub Workflowで訓練されたモデルを読み込み"""
+        try:
+            # モデルファイルのパス
+            density_model_path = 'api/density_model.joblib'
+            seats_model_path = 'api/seats_model.joblib'
+            best_params_path = 'api/best_params.joblib'
+            performance_path = 'api/model_performance.joblib'
+            
+            # モデルを読み込み
+            density_model = joblib.load(density_model_path)
+            seats_model = joblib.load(seats_model_path)
+            best_params = joblib.load(best_params_path)
+            performance = joblib.load(performance_path)
+            
+            return {
+                'density_model': density_model,
+                'seats_model': seats_model,
+                'best_params': best_params,
+                'performance': performance
+            }
+            
+        except Exception as e:
+            # モデル読み込みに失敗した場合はフォールバックモードに
+            return {
+                'density_model': None,
+                'seats_model': None,
+                'best_params': {'status': 'Model loading failed, using fallback'},
+                'performance': {'status': 'Model loading failed, using fallback', 'fallback_mode': True}
+            }
     
     def get_supabase_data(self, query_params=""):
         """Supabaseから実データを取得"""
@@ -81,9 +102,32 @@ class handler(BaseHTTPRequestHandler):
             raise Exception(f"Failed to fetch Supabase data: {str(e)}")
     
     def create_features(self, day_of_week, avg_density_seats_ratio):
-        """特徴量を作成（一時的に無効化）"""
-        # MLモデルが無効化されているため、特徴量作成をスキップ
-        return None
+        """特徴量を作成（10個の特徴量）"""
+        try:
+            # 基本特徴量
+            features = [day_of_week, avg_density_seats_ratio]
+            
+            # 曜日ダミー変数（月曜日から金曜日まで）
+            is_monday = 1 if day_of_week == 0 else 0
+            is_tuesday = 1 if day_of_week == 1 else 0
+            is_wednesday = 1 if day_of_week == 2 else 0
+            is_thursday = 1 if day_of_week == 3 else 0
+            is_friday = 1 if day_of_week == 4 else 0
+            
+            features.extend([is_monday, is_tuesday, is_wednesday, is_thursday, is_friday])
+            
+            # 週の分類特徴量（元の訓練データと同じロジック）
+            is_early_week = 1 if day_of_week in [0, 1] else 0  # 月火
+            is_mid_week = 1 if day_of_week == 2 else 0         # 水
+            is_late_week = 1 if day_of_week in [3, 4] else 0   # 木金
+            
+            features.extend([is_early_week, is_mid_week, is_late_week])
+            
+            return np.array(features).reshape(1, -1)
+            
+        except Exception as e:
+            # 特徴量作成に失敗した場合はNoneを返す
+            return None
     
     def get_density_seats_ratio(self, day_of_week):
         """Supabaseから実際のdensity_seats_ratioを取得"""
@@ -117,17 +161,41 @@ class handler(BaseHTTPRequestHandler):
             return 0.15  # 15%の密度比率（平均的な値）
     
     def predict_with_models(self, day_of_week):
-        """訓練済みモデルで予測（一時的にSupabaseデータのみ使用）"""
-        # MLモデルが無効化されているため、直接データベース平均を使用
+        """訓練済みモデルで予測（MLモデル使用）"""
         try:
-            return self.get_database_average(day_of_week)
-        except Exception as e:
-            # 最終フォールバック: 安全なデフォルト値
+            # モデルを読み込み
+            models = self.load_trained_models()
+            
+            # モデルが利用可能かチェック
+            if models['density_model'] is None or models['seats_model'] is None:
+                # モデルが利用できない場合はデータベース平均を使用
+                return self.get_database_average(day_of_week)
+            
+            # 特徴量を作成
+            avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
+            features = self.create_features(day_of_week, avg_density_seats_ratio)
+            
+            if features is None:
+                # 特徴量作成に失敗した場合はデータベース平均を使用
+                return self.get_database_average(day_of_week)
+            
+            # 予測実行
+            density_pred = models['density_model'].predict(features)[0]
+            seats_pred = models['seats_model'].predict(features)[0]
+            
+            # 予測結果を正規化
+            occupancy_rate = max(0.0, min(1.0, density_pred))
+            occupied_seats = max(0, min(8, round(seats_pred)))
+            
             return {
-                "occupancy_rate": 0.3,  # 30%の占有率（平日の平均的な値）
-                "occupied_seats": 2,     # 2席占有（平均的な値）
-                "model_prediction": False
+                "occupancy_rate": round(occupancy_rate, 2),
+                "occupied_seats": occupied_seats,
+                "model_prediction": True
             }
+            
+        except Exception as e:
+            # MLモデル予測に失敗した場合はデータベース平均を使用
+            return self.get_database_average(day_of_week)
     
     def get_database_average(self, day_of_week):
         """Supabaseデータから平均を計算（フォールバック）"""
@@ -161,7 +229,6 @@ class handler(BaseHTTPRequestHandler):
             return {
                 "occupancy_rate": round(occupancy_rate, 2),
                 "occupied_seats": occupied_seats,
-                "model_prediction": False
             }
             
         except Exception as e:
@@ -169,11 +236,10 @@ class handler(BaseHTTPRequestHandler):
             return {
                 "occupancy_rate": 0.3,  # 30%の占有率
                 "occupied_seats": 2,     # 2席占有
-                "model_prediction": False
             }
     
     def handle_today_tomorrow(self):
-        """今日・明日予測API"""
+        """今日・明日予測API（MLモデル使用）"""
         try:
             # 現在の日時を取得
             now = datetime.now()
@@ -188,13 +254,13 @@ class handler(BaseHTTPRequestHandler):
                 weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
                 return weekday_names[weekday]
             
-            # 今日の予測
+            # 今日の予測（MLモデル使用）
             if today_weekday >= 5:  # 土日
                 today_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
             else:
                 today_prediction = self.predict_with_models(today_weekday)
             
-            # 明日の予測
+            # 明日の予測（MLモデル使用）
             if tomorrow_weekday >= 5:  # 土日
                 tomorrow_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
             else:
@@ -209,17 +275,17 @@ class handler(BaseHTTPRequestHandler):
                         "weekday_name": get_weekday_name(today_weekday),
                         "occupancy_rate": today_prediction["occupancy_rate"],
                         "occupied_seats": today_prediction["occupied_seats"],
-                        "model_prediction": today_prediction["model_prediction"]
+                        "model_prediction": today_prediction.get("model_prediction", False)
                     },
                     "tomorrow": {
                         "weekday": tomorrow_weekday,
                         "weekday_name": get_weekday_name(tomorrow_weekday),
                         "occupancy_rate": tomorrow_prediction["occupancy_rate"],
                         "occupied_seats": tomorrow_prediction["occupied_seats"],
-                        "model_prediction": tomorrow_prediction["model_prediction"]
+                        "model_prediction": tomorrow_prediction.get("model_prediction", False)
                     }
                 },
-                "prediction_method": "trained_model_with_supabase_fallback",
+                "prediction_method": "ml_model_with_supabase_fallback",
                 "environment": "production"
             }
             
@@ -229,23 +295,23 @@ class handler(BaseHTTPRequestHandler):
             self.send_error_response("Internal server error")
     
     def handle_weekly_average(self):
-        """週間平均予測API"""
+        """週間平均予測API（単純平均使用）"""
         try:
             # 曜日名の定義
             weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
             
             weekly_averages = []
             
-            # 各平日の予測を計算
+            # 各平日の予測を計算（単純平均を使用）
             for day_of_week in range(5):  # 平日のみ（0-4）
-                prediction = self.predict_with_models(day_of_week)
+                prediction = self.get_database_average(day_of_week)
                 
                 weekly_averages.append({
                     "weekday": day_of_week,
                     "weekday_name": weekday_names[day_of_week],
                     "occupancy_rate": prediction["occupancy_rate"],
                     "occupied_seats": prediction["occupied_seats"],
-                    "model_prediction": prediction["model_prediction"]
+                    "model_prediction": False  # 単純平均を使用
                 })
             
             # レスポンスデータの構築
@@ -254,7 +320,7 @@ class handler(BaseHTTPRequestHandler):
                 "data": {
                     "weekly_averages": weekly_averages
                 },
-                "prediction_method": "trained_model_with_supabase_fallback",
+                "prediction_method": "database_average",
                 "environment": "production"
             }
             
@@ -278,7 +344,8 @@ class handler(BaseHTTPRequestHandler):
                         "seats_model": "api/seats_model.joblib",
                         "best_params": "api/best_params.joblib",
                         "performance": "api/model_performance.joblib"
-                    }
+                    },
+                    "ml_models_enabled": models['density_model'] is not None and models['seats_model'] is not None
                 },
                 "environment": "production"
             }
