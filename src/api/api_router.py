@@ -183,7 +183,9 @@ class APIRouter(BaseHTTPRequestHandler):
                 }
             }
             
-            for day, values in day_of_week_data.items():
+            # 平日（0-4）のみ処理
+            for day in range(5):  # 0-4の平日のみ
+                values = day_of_week_data[day]
                 if values:
                     avg_occupancy = sum(v['occupancy_rate'] for v in values) / len(values)
                     avg_occupied_seats = sum(v['occupied_seats'] for v in values) / len(values)
