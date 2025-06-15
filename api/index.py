@@ -189,8 +189,7 @@ class handler(BaseHTTPRequestHandler):
             
             return {
                 "occupancy_rate": round(occupancy_rate, 2),
-                "occupied_seats": occupied_seats,
-                "model_prediction": True
+                "occupied_seats": occupied_seats
             }
             
         except Exception as e:
@@ -256,13 +255,13 @@ class handler(BaseHTTPRequestHandler):
             
             # 今日の予測（MLモデル使用）
             if today_weekday >= 5:  # 土日
-                today_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
+                today_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
             else:
                 today_prediction = self.predict_with_models(today_weekday)
             
             # 明日の予測（MLモデル使用）
             if tomorrow_weekday >= 5:  # 土日
-                tomorrow_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0, "model_prediction": False}
+                tomorrow_prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
             else:
                 tomorrow_prediction = self.predict_with_models(tomorrow_weekday)
             
@@ -274,15 +273,13 @@ class handler(BaseHTTPRequestHandler):
                         "weekday": today_weekday,
                         "weekday_name": get_weekday_name(today_weekday),
                         "occupancy_rate": today_prediction["occupancy_rate"],
-                        "occupied_seats": today_prediction["occupied_seats"],
-                        "model_prediction": today_prediction.get("model_prediction", False)
+                        "occupied_seats": today_prediction["occupied_seats"]
                     },
                     "tomorrow": {
                         "weekday": tomorrow_weekday,
                         "weekday_name": get_weekday_name(tomorrow_weekday),
                         "occupancy_rate": tomorrow_prediction["occupancy_rate"],
-                        "occupied_seats": tomorrow_prediction["occupied_seats"],
-                        "model_prediction": tomorrow_prediction.get("model_prediction", False)
+                        "occupied_seats": tomorrow_prediction["occupied_seats"]
                     }
                 },
                 "prediction_method": "ml_model_with_supabase_fallback",
@@ -310,8 +307,7 @@ class handler(BaseHTTPRequestHandler):
                     "weekday": day_of_week,
                     "weekday_name": weekday_names[day_of_week],
                     "occupancy_rate": prediction["occupancy_rate"],
-                    "occupied_seats": prediction["occupied_seats"],
-                    "model_prediction": False  # 単純平均を使用
+                    "occupied_seats": prediction["occupied_seats"]
                 })
             
             # レスポンスデータの構築
@@ -344,8 +340,7 @@ class handler(BaseHTTPRequestHandler):
                         "seats_model": "api/seats_model.joblib",
                         "best_params": "api/best_params.joblib",
                         "performance": "api/model_performance.joblib"
-                    },
-                    "ml_models_enabled": models['density_model'] is not None and models['seats_model'] is not None
+                    }
                 },
                 "environment": "production"
             }
