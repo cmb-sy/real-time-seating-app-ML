@@ -1,4 +1,4 @@
-name: 機械学習モデル再訓練・自動更新
+name: 機械学習モデル更新
 
 on:
   # 手動実行
@@ -6,11 +6,9 @@ on:
   # 隔週月曜日の午前2時に自動実行（第1・3週）
   schedule:
     - cron: "0 2 * * 1"
-  # すべてのpush時に実行
   push:
-    # pathsを削除してすべてのpushで実行
     branches:
-      - main # mainブランチへのpushのみに限定（必要に応じて調整）
+      - main
 
 jobs:
   retrain-and-update:
@@ -40,17 +38,6 @@ jobs:
             echo "✅ 第${week_of_month}週です - 定期実行を継続します"
           fi
 
-      - name: 既存の.joblibファイルを削除
-        run: |
-          if ls api/*.joblib 1> /dev/null 2>&1; then
-            echo "🗑️ 既存の.joblibファイルを削除します"
-            rm -f api/*.joblib
-            echo "削除されたファイル:"
-            ls -la api/ | grep -E "\.(joblib|pkl)$" || echo "- すべて削除完了"
-          else
-            echo "📝 api/ディレクトリに.joblibファイルは見つかりませんでした"
-          fi
-
       - name: Python環境をセットアップ
         uses: actions/setup-python@v4
         with:
@@ -69,10 +56,11 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> $GITHUB_ENV
           echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" >> $GITHUB_ENV
 
-      - name: 機械学習モデルを訓練
+      - name: 機械学習モデルを訓練（既存ファイル上書き）
         run: |
+          echo "🔄 既存の.joblibファイルを上書きしてモデルを訓練します"
           export PYTHONPATH=$GITHUB_WORKSPACE
-          python utils/train.py --mode train
+          python src/ml/train.py --mode train
 
       - name: モデルファイルをコミット・プッシュ
         run: |
