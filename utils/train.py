@@ -1,12 +1,11 @@
 """
 機械学習モデル構築スクリプト
 """
-
-import os
 import sys
+sys.path.append('utils') #先に呼ばないとダメ
+
 import logging
 import argparse
-sys.path.append('utils') #先に呼ばないとダメ
 from models import MLPredictor
 from data_processor import MLDataProcessor
 

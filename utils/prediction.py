@@ -1,48 +1,41 @@
 """
 予測機能のみを分離
 """
-import os
 import sys
-import json
-from datetime import datetime, timedelta
+import os
+sys.path.append('.') #先に呼ばないとダメ
 
-# 現在のファイルのディレクトリを取得してパスに追加
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)  # 同じ階層を最優先に
-
-# utilsディレクトリもパスに追加
-utils_dir = os.path.join(current_dir, 'utils')
-if os.path.exists(utils_dir):
-    sys.path.insert(0, utils_dir)
-
-# 共通のSupabaseアクセスモジュールをインポート
 from supabase_access import get_supabase_data
 
 try:
     import joblib
     import pandas as pd
     from data_processor import engineer_features, get_feature_columns
-    ML_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: ML libraries not available: {e}")
-    joblib = None
-    pd = None
-    engineer_features = None
-    get_feature_columns = None
-    ML_AVAILABLE = False
+    raise e
 
 class PredictionService:
     def __init__(self):
+        # 初期化時にモデルを読み込む
         self.models = self._load_trained_models()
     
     def _load_trained_models(self):
         try:
+            # apiディレクトリのパスを設定
+            api_dir = 'api'
+            
             model_files = {
-                'density_model': 'api/density_model.joblib',
-                'seats_model': 'api/seats_model.joblib',
-                'best_params': 'api/best_params.joblib',
-                'performance': 'api/model_performance.joblib'
+                'density_model': os.path.join(api_dir, 'density_model.joblib'),
+                'seats_model': os.path.join(api_dir, 'seats_model.joblib'),
+                'best_params': os.path.join(api_dir, 'best_params.joblib'),
+                'performance': os.path.join(api_dir, 'model_performance.joblib')
             }
+            
+            # ファイルの存在確認
+            for name, path in model_files.items():
+                if not os.path.exists(path):
+                    print(f"Warning: Model file not found: {path}")
+            
             models = {}
             for name, path in model_files.items():
                 try:
@@ -52,14 +45,8 @@ class PredictionService:
                     models[name] = None
             return models
         except Exception as e:
-            print(f"Model loading failed: {str(e)}")
-            return {
-                'density_model': None,
-                'seats_model': None,
-                'best_params': None,
-                'performance': None
-            }
-    
+            raise e
+
     def create_features(self, day_of_week, avg_density_seats_ratio):
         """特徴量を作成"""
         try:
@@ -77,8 +64,7 @@ class PredictionService:
             return X
             
         except Exception as e:
-            print(f"特徴量作成エラー: {str(e)}")
-            return None
+            raise e
     
     def get_density_seats_ratio(self, day_of_week):
         """density_seats_ratioを取得"""
@@ -102,28 +88,23 @@ class PredictionService:
             return avg_ratio
             
         except Exception as e:
-            print(f"Error calculating density_seats_ratio: {e}")
-            # フォールバック値
-            fallback = 0.1 + (day_of_week * 0.02)
-            print(f"Using fallback ratio: {fallback}")
-            return fallback
+            raise e
     
     def predict_with_models(self, day_of_week):
         """訓練済みモデルで予測"""
         try:
-            print(f"day_of_weekの確認: {day_of_week}")
-            
             if self.models['density_model'] is None or self.models['seats_model'] is None:
-                print("モデルが利用できないため、モックデータを使用")
+                print("モデルが利用できないため、モックデータを使用します。")
                 return self.get_database_average(day_of_week)
             
             avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
             features = self.create_features(day_of_week, avg_density_seats_ratio)
             
             if features is None:
-                print("featuresがNoneのため、モックデータを使用")
+                print("featuresがNoneのため、モックデータを使用します。")
                 return self.get_database_average(day_of_week)
             try:
+                print("supabaseから取得したデータを使用します。")
                 density_pred = self.models['density_model'].predict(features)[0]
                 seats_pred = self.models['seats_model'].predict(features)[0]
             except Exception as model_error:
@@ -140,8 +121,7 @@ class PredictionService:
             }
             
         except Exception as e:
-            print(f"Prediction error: {str(e)}")
-            return self.get_database_average(day_of_week)
+            raise e
     
     def get_database_average(self, day_of_week):
         """平均値を計算"""
@@ -171,13 +151,7 @@ class PredictionService:
             }
             
         except Exception as e:
-            print(f"Database average calculation error: {e}")
-            # フォールバック値
-            return {
-                "occupancy_rate": 0.5,
-                "occupied_seats": 4,
-                "model_used": False
-            }
+            raise e
 
     def predict_today_tomorrow(self):
         """今日・明日の予測"""
@@ -249,10 +223,4 @@ if __name__ == "__main__":
     weekly = service.predict_weekly_average()
     for day_data in weekly['weekly_averages']:
         print(f"{day_data['weekday_name']}: 占有率{day_data['occupancy_rate']}, 席数{day_data['occupied_seats']}")
-    
-    print("\n3. モデル状態確認")
-    print(f"Density Model: {'利用可能' if service.models['density_model'] is not None else '利用不可'}")
-    print(f"Seats Model: {'利用可能' if service.models['seats_model'] is not None else '利用不可'}")
-    print(f"Best Params: {service.models['best_params']}")
-    
     print("\nテスト完了！")

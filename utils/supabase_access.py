@@ -12,16 +12,12 @@ def get_supabase_config():
         supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
         service_role_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
         anon_key = os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
-        
-        print(f"URL exists: {bool(supabase_url)}")
-        print(f"SERVICE_ROLE_KEY exists: {bool(service_role_key)}")
-        print(f"ANON_KEY exists: {bool(anon_key)}")
-        
+                
         if service_role_key:
-            print(f"Using SERVICE_ROLE_KEY (first 20): {service_role_key[:20]}...")
+            print("SERVICE_ROLE_KEYを利用します")
             return supabase_url, service_role_key
         elif anon_key:
-            print(f"Using ANON_KEY (first 20): {anon_key[:20]}...")
+            print("ANON_KEYを利用します") 
             return supabase_url, anon_key
         else:
             print("No valid keys found")
@@ -64,32 +60,19 @@ def get_supabase_data(query_params=None):
         return get_mock_data()
     
     try:
-        # デバッグ用の情報出力
-        print(f"Supabase URL: {supabase_url}")
-        print(f"API Key (first 20 chars): {supabase_key[:20]}...")
-        print(f"API Key length: {len(supabase_key)}")
-        
         headers = {
             'apikey': supabase_key,
             'Authorization': f'Bearer {supabase_key}',
             'Content-Type': 'application/json'
         }
-        
         url = f"{supabase_url}/rest/v1/density_history"
         if query_params:
             url = f"{url}?{query_params}"
-        
-        print(f"Request URL: {url}")
-        
         req = urllib.request.Request(url, headers=headers)
         
         with urllib.request.urlopen(req) as response:
             raw_response = response.read().decode()
-            print(f"Raw response: {raw_response}")
-            
             data = json.loads(raw_response)
-            
-        print("data", data)
         return data
         
     except urllib.error.HTTPError as e:
@@ -97,10 +80,8 @@ def get_supabase_data(query_params=None):
         print(f"Error response: {e.read().decode()}")
         return get_mock_data()
     except Exception as e:
-        print(f"Supabase access failed: {str(e)} - using mock data")
-        return get_mock_data()
+        raise e
 
-# テスト用コード
 if __name__ == "__main__":
     # 全データ取得
     all_data = get_supabase_data()
