@@ -21,8 +21,10 @@ class PredictionService:
     
     def _load_trained_models(self):
         try:
-            # apiディレクトリのパスを設定
-            api_dir = 'api'
+            # 現在のファイルの場所から相対的にパスを構築
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)  # utils の親ディレクトリ
+            api_dir = os.path.join(project_root, 'api')
             
             model_files = {
                 'density_model': os.path.join(api_dir, 'density_model.joblib'),
@@ -30,19 +32,24 @@ class PredictionService:
                 'best_params': os.path.join(api_dir, 'best_params.joblib'),
                 'performance': os.path.join(api_dir, 'model_performance.joblib')
             }
-            
-            # ファイルの存在確認
+
+        
+            print(f"モデル検索ディレクトリ: {api_dir}")
+        
+        # ファイルの存在確認
             for name, path in model_files.items():
-                if not os.path.exists(path):
+                exists = os.path.exists(path)
+                print(f"📁 {name}: {path} - {'存在' if exists else '不存在'}")
+                if not exists:
                     print(f"Warning: Model file not found: {path}")
-            
+        
             models = {}
             for name, path in model_files.items():
                 try:
                     models[name] = joblib.load(path)
+                    print(f"✅ {name} 読み込み成功")
                 except Exception as e:
-                    print(f"Model loading failed for {name}: {str(e)}")
-                    models[name] = None
+                    print(f"❌ {name} 読み込みエラー: {str(e)}")
             return models
         except Exception as e:
             raise e
@@ -93,6 +100,7 @@ class PredictionService:
         try:
             if self.models['density_model'] is None or self.models['seats_model'] is None:
                 print("モデルが利用できないため、モックデータを使用します。")
+
                 return self.get_database_average(day_of_week)
             
             avg_density_seats_ratio = self.get_density_seats_ratio(day_of_week)
@@ -115,7 +123,6 @@ class PredictionService:
             return {
                 "occupancy_rate": round(occupancy_rate, 2),
                 "occupied_seats": occupied_seats,
-                "model_used": True
             }
             
         except Exception as e:
@@ -145,7 +152,6 @@ class PredictionService:
             return {
                 "occupancy_rate": round(occupancy_rate, 2),
                 "occupied_seats": occupied_seats,
-                "model_used": False
             }
             
         except Exception as e:

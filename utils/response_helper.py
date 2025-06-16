@@ -6,58 +6,50 @@ import argparse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Type
 
-def send_json_response(handler: BaseHTTPRequestHandler):
-    handler.send_header('Access-Control-Allow-Origin', '*')
-    handler.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
-    handler.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, Accept, X-Requested-With')
-    handler.send_header('Content-Type', 'application/json')
-    handler.send_header('Access-Control-Max-Age', '86400')
-    handler.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+def send_json_response(handler: BaseHTTPRequestHandler, data: dict, status_code: int = 200):
+    """JSON レスポンスを送信"""
+    try:
+        # 1. ステータスコードを送信
+        handler.send_response(status_code)
+        
+        # 2. ヘッダーを送信
+        handler.send_header('Content-Type', 'application/json; charset=utf-8')
+        handler.send_header('Access-Control-Allow-Origin', '*')
+        handler.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
+        handler.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, Accept, X-Requested-With')
+        handler.send_header('Access-Control-Max-Age', '86400')
+        
+        # 3. ヘッダー終了
+        handler.end_headers()
+        
+        # 4. ボディを送信
+        response_json = json.dumps(data, ensure_ascii=False, indent=2)
+        handler.wfile.write(response_json.encode('utf-8'))
+        
+    except Exception as e:
+        print(f"レスポンス送信エラー: {e}")
+        raise
 
-def send_success_response(handler: BaseHTTPRequestHandler, data: dict):
-    """成功レスポンスを送信"""
-    handler.send_response(200)
-    handler.send_header('Content-type', 'application/json')
-    send_json_response(handler)
-    handler.end_headers()
-    handler.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
-
-def send_error_response(handler: BaseHTTPRequestHandler, error_message: str):
+def send_error_response(handler: BaseHTTPRequestHandler, error_message: str, status_code: int = 500):
     """エラーレスポンスを送信"""
-    handler.send_response(500)
-    handler.send_header('Content-type', 'application/json')
-    send_json_response(handler)
-    handler.end_headers()
-    
     error_data = {
         "success": False,
-        "error": error_message
+        "error": error_message,
+        "status_code": status_code
     }
-    
-    handler.wfile.write(json.dumps(error_data, ensure_ascii=False).encode('utf-8'))
+    send_json_response(handler, error_data, status_code)
 
 def send_options_response(handler: BaseHTTPRequestHandler):
     """プリフライトリクエストへの対応"""
     handler.send_response(200)
-    send_json_response(handler)
-    handler.end_headers()
-
-def send_head_response(handler: BaseHTTPRequestHandler):
-    """HEADリクエストへの対応"""
-    handler.send_response(200)
-    handler.send_header('Content-type', 'application/json')
-    send_json_response(handler)
+    handler.send_header('Access-Control-Allow-Origin', '*')
+    handler.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
+    handler.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, Accept, X-Requested-With')
+    handler.send_header('Access-Control-Max-Age', '86400')
     handler.end_headers()
 
 def run_server(handler_class: Type[BaseHTTPRequestHandler], port=8000, server_name="API"):
-    """
-    HTTPサーバーを起動する汎用関数
-    
-    Args:
-        handler_class: リクエストを処理するハンドラークラス
-        port (int): サーバーのポート番号
-        server_name (str): サーバーの名前（ログ表示用）
-    """
+    """HTTPサーバーを起動する汎用関数"""
     server_address = ('', port)
     httpd = HTTPServer(server_address, handler_class)
     print(f"🚀 {server_name}サーバーを起動しました。http://localhost:{port}/ でアクセスできます。")
@@ -69,20 +61,3 @@ def run_server(handler_class: Type[BaseHTTPRequestHandler], port=8000, server_na
     finally:
         httpd.server_close()
         print(f"{server_name}サーバーは停止しました。")
-
-def parse_port_arg(description="APIサーバーを起動します", default_port=8000):
-    """
-    コマンドライン引数からポート番号を解析する関数
-    
-    Args:
-        description (str): コマンドの説明
-        default_port (int): デフォルトのポート番号
-    
-    Returns:
-        int: ポート番号
-    """
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('--port', type=int, default=default_port, 
-                       help=f'サーバーのポート番号（デフォルト: {default_port}）')
-    args = parser.parse_args()
-    return args.port
