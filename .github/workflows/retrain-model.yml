@@ -60,7 +60,7 @@ jobs:
         run: |
           echo "🔄 既存の.joblibファイルを上書きしてモデルを訓練します"
           export PYTHONPATH=$GITHUB_WORKSPACE
-          python src/ml/train.py --mode train
+          python utils/train.py --mode train
 
       - name: モデルファイルをコミット・プッシュ
         run: |
