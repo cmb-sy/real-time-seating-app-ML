@@ -3,14 +3,14 @@ name: 機械学習モデル再訓練・自動更新
 on:
   # 手動実行
   workflow_dispatch:
-  # 毎週月曜日の午前2時に自動実行
+  # 隔週月曜日の午前2時に自動実行（第1・3週）
   schedule:
     - cron: "0 2 * * 1"
-  # データが更新された時（特定のファイルが変更された時）
+  # すべてのpush時に実行
   push:
-    paths:
-      - "src/ml/**"
-      - "learn_requirements.txt"
+    # pathsを削除してすべてのpushで実行
+    branches:
+      - main # mainブランチへのpushのみに限定（必要に応じて調整）
 
 jobs:
   retrain-and-update:
@@ -27,6 +27,29 @@ jobs:
         with:
           # GITHUB_TOKENを使用してプッシュ権限を確保
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 隔週実行チェック（定期実行時のみ）
+        if: github.event_name == 'schedule'
+        run: |
+          # 月の第1・3週の月曜日のみ実行
+          week_of_month=$(( ($(date +%d) - 1) / 7 + 1 ))
+          if [ $week_of_month -eq 2 ] || [ $week_of_month -eq 4 ]; then
+            echo "🚫 第${week_of_month}週です - 定期実行をスキップします"
+            exit 78  # neutral exit code
+          else
+            echo "✅ 第${week_of_month}週です - 定期実行を継続します"
+          fi
+
+      - name: 既存の.joblibファイルを削除
+        run: |
+          if ls api/*.joblib 1> /dev/null 2>&1; then
+            echo "🗑️ 既存の.joblibファイルを削除します"
+            rm -f api/*.joblib
+            echo "削除されたファイル:"
+            ls -la api/ | grep -E "\.(joblib|pkl)$" || echo "- すべて削除完了"
+          else
+            echo "📝 api/ディレクトリに.joblibファイルは見つかりませんでした"
+          fi
 
       - name: Python環境をセットアップ
         uses: actions/setup-python@v4
@@ -56,9 +79,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .
-          git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')"
+          git commit -m "🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S')" || echo "変更なし"
           # GITHUB_TOKENを使用してプッシュ
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }} || echo "プッシュ済み"
           echo "✅ モデルファイルを更新しました - Vercelが自動デプロイを開始します"
 
       - name: 完了通知
@@ -67,6 +90,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**実行日時**: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "**実行トリガー**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**実行ブランチ**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 更新されたファイル" >> $GITHUB_STEP_SUMMARY
           echo "**本番用API (api/)**:" >> $GITHUB_STEP_SUMMARY
@@ -79,4 +103,4 @@ jobs:
           echo "Vercelが自動的に本番環境にデプロイを開始します" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ⏰ 次回実行予定" >> $GITHUB_STEP_SUMMARY
-          echo "毎週月曜日 午前2時（UTC）" >> $GITHUB_STEP_SUMMARY
+          echo "隔週月曜日 午前2時（UTC）- 第1・3週のみ + 全pushイベント" >> $GITHUB_STEP_SUMMARY
