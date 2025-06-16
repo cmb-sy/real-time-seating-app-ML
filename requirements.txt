@@ -3,3 +3,4 @@ requests==2.32.4
 numpy==2.3.0
 joblib==1.4.2
 pandas==2.3.0
+supabase==2.15.3 #get_density_seats_ratioが使わなくなればいらなくなりそう
