@@ -1,3 +1,5 @@
-# デプロイ用
-requests==2.31.0
-numpy==1.24.3
+# デプロイ用（python3.12に合わせたバージョン）
+requests==2.32.4
+numpy==2.3.0
+joblib==1.4.2
+scikit-learn==1.4.2
