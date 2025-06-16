@@ -2,13 +2,21 @@
   "version": 2,
   "functions": {
     "api/index.py": {
-      "runtime": "python3.10"
+      "runtime": "@vercel/python@4.7.2"
     }
   },
-
   "routes": [
-    { "src": "/api/predictions/(.*)", "dest": "api/index.py" },
-    { "src": "/api/model-info", "dest": "api/index.py" },
-    { "src": "/api/(.*)", "dest": "api/index.py" }
+    {
+      "src": "/api/predictions/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/api/model-info",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.py"
+    }
   ]
 }
