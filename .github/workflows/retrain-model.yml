@@ -6,10 +6,6 @@ on:
   # 隔週月曜日の午前2時に自動実行（第1・3週）
   schedule:
     - cron: "0 2 * * 1"
-  push:
-    branches:
-      - main
-
 jobs:
   retrain-and-update:
     runs-on: ubuntu-latest
