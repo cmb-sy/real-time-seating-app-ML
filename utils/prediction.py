@@ -210,10 +210,7 @@ class PredictionService:
         return {"weekly_averages": weekly_averages}
 
 if __name__ == "__main__":
-    print("=== 予測機能テスト ===")
-    
     service = PredictionService()
-    
     print("\n1. 今日・明日予測テスト")
     today_tomorrow = service.predict_today_tomorrow()
     print(f"今日: {today_tomorrow['today']}")

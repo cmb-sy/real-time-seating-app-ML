@@ -152,8 +152,7 @@ runtime.txt
 **/site-packages/wheel/
 
 # 不要な依存関係ファイル
-requirements.txt
-requirements-vercel.txt
+learn_requirements.txt
 
 # Test and debug files
 api/test*.py
