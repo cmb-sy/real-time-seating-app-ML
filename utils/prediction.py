@@ -56,7 +56,6 @@ class PredictionService:
                 'occupied_seats': [8 * avg_density_seats_ratio]
             }
             df = pd.DataFrame(data)
-            
             feature_df = engineer_features(df)
             feature_columns = get_feature_columns()
             available_features = [col for col in feature_columns if col in feature_df.columns]
@@ -84,7 +83,6 @@ class PredictionService:
                 raise Exception("No valid ratio data found")
             
             avg_ratio = sum(ratios) / len(ratios)
-            print(f"Calculated density_seats_ratio for day {day_of_week}: {avg_ratio:.4f}")
             return avg_ratio
             
         except Exception as e:
@@ -167,8 +165,6 @@ class PredictionService:
         def get_weekday_name(weekday):
             weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
             return weekday_names[weekday]
-        
-        print(f"Predicting for today ({today_weekday}) and tomorrow ({tomorrow_weekday})")
         
         # 土日の場合は空席
         if today_weekday >= 5:
