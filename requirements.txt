@@ -2,3 +2,4 @@
 requests==2.32.4
 numpy==2.3.0
 joblib==1.4.2
+pandas==2.3.0
