@@ -146,7 +146,7 @@ src/
 │   └── config.py                        # 設定管理
 └── ml/
     ├── ml_models.py                     # MLモデル定義
-    ├── train_ml_models.py               # モデル訓練
+    ├── train.py               # モデル訓練
     └── data_analysis.py                 # データ分析
 ```
 

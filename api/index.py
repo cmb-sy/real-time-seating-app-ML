@@ -1,15 +1,16 @@
 """
-統合API - Supabase実データ専用版
+APIサーバー
 """
 import os
 import sys
 import json
-import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler
 
-sys.path.append('src/ml') #先に呼ばないとダメ
+sys.path.append('utils') #先に呼ばないとダメ
+
+# 共通のSupabaseアクセスモジュールをインポート
+from supabase_access import get_supabase_data
 
 try:
     import joblib
@@ -49,16 +50,6 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
-    
-    def get_supabase_config(self):
-        """Supabase設定を取得"""
-        supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
-        supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
-        
-        if not supabase_url or not supabase_key:
-            raise Exception("Database configuration error")
-            
-        return supabase_url, supabase_key
     
     def load_trained_models(self):
         if not ML_LIBRARIES_AVAILABLE or joblib is None:
@@ -102,28 +93,6 @@ class handler(BaseHTTPRequestHandler):
                 'performance': {'status': f'Model loading failed: {str(e)}'}
             }
     
-    def get_supabase_data(self, query_params=""):
-        """Supabaseから実データを取得"""
-        try:
-            supabase_url, supabase_key = self.get_supabase_config()
-            
-            headers = {
-                'apikey': supabase_key,
-                'Authorization': f'Bearer {supabase_key}',
-                'Content-Type': 'application/json'
-            }
-            
-            url = f"{supabase_url}/rest/v1/density_history?{query_params}"
-            req = urllib.request.Request(url, headers=headers)
-            
-            with urllib.request.urlopen(req) as response:
-                data = json.loads(response.read().decode())
-            
-            return data
-            
-        except Exception as e:
-            raise Exception(f"Failed to fetch Supabase data: {str(e)}")
-    
     def create_features(self, day_of_week, avg_density_seats_ratio):
         """特徴量を作成（data_processor.pyの関数を使用）"""
         if not ML_LIBRARIES_AVAILABLE or np is None:
@@ -158,11 +127,11 @@ class handler(BaseHTTPRequestHandler):
         """Supabaseから実際のdensity_seats_ratioを取得"""
         try:
             # 指定された曜日のデータを取得
-            data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
+            data = get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
             if not data:
                 # 指定曜日にデータがない場合、全曜日の平均を使用
-                all_data = self.get_supabase_data("select=density_rate,occupied_seats")
+                all_data = get_supabase_data("select=density_rate,occupied_seats")
                 if not all_data:
                     raise Exception("No data available in database")
                 data = all_data
@@ -233,7 +202,7 @@ class handler(BaseHTTPRequestHandler):
         """Supabaseデータから平均を計算"""
         try:
             # 指定された曜日のデータを取得
-            data = self.get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
+            data = get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
             if not data:
                 data = []

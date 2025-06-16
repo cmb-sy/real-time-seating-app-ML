@@ -49,7 +49,7 @@ jobs:
       - name: 機械学習モデルを訓練
         run: |
           export PYTHONPATH=$GITHUB_WORKSPACE
-          python src/ml/train_ml_models.py --mode train
+          python src/ml/train.py --mode train
 
       - name: モデルファイルをコミット・プッシュ
         run: |

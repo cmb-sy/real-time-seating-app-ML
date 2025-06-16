@@ -566,4 +566,4 @@ if __name__ == "__main__":
     else:
         print("❌ 保存済みモデルが見つかりません。")
         print("先に以下のコマンドでモデルを訓練してください:")
-        print("python src/ml/train_ml_models.py --mode train --n-trials 30")
+        print("python src/ml/train.py --mode train --n-trials 30")

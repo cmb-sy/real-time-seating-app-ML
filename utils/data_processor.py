@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 """
-- ML用データ準備
 - 特徴量エンジニアリング
 """
 import os
@@ -9,18 +8,17 @@ import sys
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple
-import logging
 from supabase import create_client
-import pathlib
 
-# .envファイルのパスを絶対パスで指定
-from dotenv import load_dotenv
-current_dir = pathlib.Path(__file__).parent.absolute()
-project_root = current_dir.parent.parent
-env_path = project_root / '.env'
-load_dotenv(dotenv_path=env_path)
+# 現在のファイルのディレクトリを取得してパスに追加
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)  # 同じ階層を最優先に
 
-logger = logging.getLogger(__name__)
+# utilsディレクトリもパスに追加
+utils_dir = os.path.join(current_dir, 'utils')
+if os.path.exists(utils_dir):
+    sys.path.insert(0, utils_dir)
+import config
 
 # 独立した特徴量エンジニアリング関数
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -47,46 +45,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     feature_df['is_mid_week'] = (feature_df['day_of_week'] == 2).astype(int)           # 水
     feature_df['is_late_week'] = (feature_df['day_of_week'].isin([3, 4])).astype(int)  # 木金
     
-    # 3. 密度率と座席数の比率
-    if 'density_seats_ratio' not in feature_df.columns:
-        feature_df['density_seats_ratio'] = feature_df['density_rate'] / (feature_df['occupied_seats'] + 1)
-    
-    # 4. 曜日ごとの統計量を計算
-    day_stats = feature_df.groupby(['day_of_week']).agg({
-        'density_rate': ['mean', 'std', 'min', 'max'],
-        'occupied_seats': ['mean', 'std', 'min', 'max']
-    })
-    
-    # マルチインデックスをフラット化
-    day_stats.columns = ['_'.join(col).strip() for col in day_stats.columns.values]
-    day_stats = day_stats.reset_index()
-    
-    # 統計量をマージ
-    feature_df = pd.merge(
-        feature_df, 
-        day_stats, 
-        on=['day_of_week'], 
-        how='left',
-        suffixes=('', '_day_avg')
-    )
-    
-    # 5. 平均値との差分を特徴量として追加
-    feature_df['density_diff_from_mean'] = feature_df['density_rate'] - feature_df['density_rate_mean']
-    feature_df['seats_diff_from_mean'] = feature_df['occupied_seats'] - feature_df['occupied_seats_mean']
-    
-    # 6. 正規化された差分（Z-score）
-    # 標準偏差が0の場合に備えて条件付き計算
-    feature_df['density_zscore'] = np.where(
-        feature_df['density_rate_std'] > 0,
-        (feature_df['density_rate'] - feature_df['density_rate_mean']) / feature_df['density_rate_std'],
-        0
-    )
-    feature_df['seats_zscore'] = np.where(
-        feature_df['occupied_seats_std'] > 0,
-        (feature_df['occupied_seats'] - feature_df['occupied_seats_mean']) / feature_df['occupied_seats_std'],
-        0
-    )
-    
+    feature_df = feature_df.fillna(0)
+
     return feature_df
 
 # 特徴量カラム名を取得する関数
@@ -108,16 +68,7 @@ def get_feature_columns() -> List[str]:
         'is_early_week',         # 週前半フラグ（月火）
         'is_mid_week',           # 週中フラグ（水）
         'is_late_week',          # 週後半フラグ（木金）
-        'density_rate_mean',     # 統計的特徴量
-        'density_rate_std',      # 統計的特徴量
-        'occupied_seats_mean',   # 統計的特徴量
-        'occupied_seats_std',    # 統計的特徴量
-        'density_diff_from_mean', # 統計的特徴量
-        'seats_diff_from_mean',   # 統計的特徴量
-        'density_zscore',         # 統計的特徴量
-        'seats_zscore'           # 統計的特徴量
     ]
-    
     return features
 
 class MLDataProcessor:
@@ -126,18 +77,14 @@ class MLDataProcessor:
         self.df = None
         self.df_weekdays = None
         # Supabaseクライアント
-        supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        supabase_url = getattr(config, 'NEXT_PUBLIC_SUPABASE_URL', None)
+        supabase_key = getattr(config, 'SUPABASE_SERVICE_ROLE_KEY', None)
         
         if not supabase_url or not supabase_key:
-            logger.error(f"環境変数が見つかりません: URL={supabase_url}, KEY={'設定あり' if supabase_key else 'なし'}")
-            logger.error(f"環境変数ファイルパス: {env_path} (存在: {env_path.exists()})")
             raise ValueError("Supabase接続情報が環境変数に設定されていません")
-            
-        self.supabase_client = create_client(supabase_url, supabase_key)
-        # 特徴量名を管理
-        self.feature_names = []
         
+        self.supabase_client = create_client(supabase_url, supabase_key)
+
     def load_data_from_supabase(self) -> pd.DataFrame:
         """
         Supabaseからデータを取得してDataFrameに変換
@@ -146,9 +93,7 @@ class MLDataProcessor:
             pd.DataFrame: 取得したデータ
         """
         try:
-            logger.info("Supabaseからデータを取得中...")
             response = self.supabase_client.table("density_history").select("*").execute()
-            
             self.df = pd.DataFrame(response.data)
             
             # データ型の変換（日付フォーマットが混在しているため、mixed形式で処理）
@@ -156,17 +101,14 @@ class MLDataProcessor:
             self.df['density_rate'] = pd.to_numeric(self.df['density_rate'])
             self.df['occupied_seats'] = pd.to_numeric(self.df['occupied_seats'])
             self.df['day_of_week'] = pd.to_numeric(self.df['day_of_week'])
-            
+        
             # 平日データのみを抽出（0-4: 月-金）
             self.df_weekdays = self.df[self.df['day_of_week'].isin([0, 1, 2, 3, 4])].copy()
-            
-            logger.info(f"データ取得完了: 全体 {len(self.df)} 件, 平日 {len(self.df_weekdays)} 件")
             
             return self.df
             
         except Exception as e:
-            logger.error(f"データ取得エラー: {e}")
-            raise
+            raise Exception(f"データ取得エラー: {e}")
     
     def create_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -178,12 +120,8 @@ class MLDataProcessor:
         Returns:
             pd.DataFrame: 特徴量エンジニアリング後のデータ
         """
-        logger.info("特徴量エンジニアリングを実行中...")
-        
         # 独立した関数を使用
         feature_df = engineer_features(df)
-        
-        logger.info(f"特徴量エンジニアリング完了: {len(feature_df.columns)} 個の特徴量を生成")
         
         return feature_df
     
@@ -227,32 +165,19 @@ class MLDataProcessor:
             # 特徴量名を保存
             self.feature_names = available_features
             
-            logger.info(f"特徴量エンジニアリング使用: {len(available_features)} 個の特徴量")
-            logger.info(f"使用特徴量: {available_features}")
         else:
             # 基本特徴量: 曜日のみ
             X = ml_data[['day_of_week']].values
             self.feature_names = ['day_of_week']
-            logger.info("基本特徴量のみ使用: day_of_week")
         
         # ターゲット変数
         y_density = ml_data['density_rate'].values
         y_seats = ml_data['occupied_seats'].values
         
-        logger.info(f"ML用データ準備完了: {len(ml_data)} 件のデータ")
-        logger.info(f"特徴量: {X.shape}, 密度率: {y_density.shape}, 占有座席数: {y_seats.shape}")
-        
         return ml_data, X, y_density, y_seats
 
 
 if __name__ == "__main__":
-    import logging
-    
-    # ログ設定
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
     
     # データ処理テスト
     processor = MLDataProcessor()
