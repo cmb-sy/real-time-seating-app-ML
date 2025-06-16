@@ -207,3 +207,6 @@ api/test*.py
 api/env-check.py
 api/simple-test.py
 api/hello.py 
+.vercel
+
+node_modules/
