@@ -2,6 +2,9 @@
 
 A machine learning backend API for real-time seating prediction system, providing intelligent forecasting of seat occupancy and density rates.
 
+本来は機械学習モデルを使用して、座席の占有率と密度率を予測するための API を構築していたが、vercel の 250MB のデプロイ制限により、joblib を読み込むことができず断念。そこで、結果を json 形式で保存し、それをフロントエンドに返す形に変更した。
+別の方法として JSON 形式でモデルパラメータを保存し、線形計算や特徴量重要度に基づく予測を行うように変更もできたが、前者のほうが楽なのでそうした。モデル更新が頻度が少ないので影響はないため前者にした。
+
 ## 🌟 Features
 
 - Real-time seat occupancy prediction

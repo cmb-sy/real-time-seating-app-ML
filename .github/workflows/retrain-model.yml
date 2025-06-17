@@ -136,7 +136,7 @@ jobs:
 
           # モデルファイルの存在確認
           model_files_found=0
-          for file in api/density_model.joblib api/seats_model.joblib api/best_params.joblib api/model_performance.joblib; do
+          for file in utils/joblib/density_model.joblib api/seats_model.joblib api/best_params.joblib api/model_performance.joblib; do
             if [ -f "$file" ]; then
               size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "不明")
               echo "✅ $file (${size} bytes)"

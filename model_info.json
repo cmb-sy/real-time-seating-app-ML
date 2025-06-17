@@ -1,0 +1,251 @@
+{
+  "data": {
+    "shape": {
+      "original": [
+        87,
+        5
+      ],
+      "weekdays_only": [
+        87,
+        5
+      ]
+    },
+    "columns": [
+      "id",
+      "occupied_seats",
+      "density_rate",
+      "created_at",
+      "day_of_week"
+    ],
+    "features": [
+      "day_of_week",
+      "density_seats_ratio",
+      "is_monday",
+      "is_tuesday",
+      "is_wednesday",
+      "is_thursday",
+      "is_friday",
+      "is_early_week",
+      "is_mid_week",
+      "is_late_week"
+    ],
+    "targets": [
+      "density_rate",
+      "occupied_seats"
+    ],
+    "categorical_features": [
+      "day_of_week",
+      "is_monday",
+      "is_tuesday",
+      "is_wednesday",
+      "is_thursday",
+      "is_friday",
+      "is_early_week",
+      "is_mid_week",
+      "is_late_week"
+    ],
+    "numeric_features": [
+      "density_seats_ratio"
+    ],
+    "stats": {
+      "density_rate": {
+        "min": 0.0,
+        "max": 100.0,
+        "mean": 25.03448275862069,
+        "median": 25.0,
+        "std": 18.593383591808703,
+        "count": 87,
+        "missing": 0,
+        "actual_max": 50.0
+      },
+      "occupied_seats": {
+        "min": 0.0,
+        "max": 8.0,
+        "mean": 2.1149425287356323,
+        "median": 3.0,
+        "std": 1.6312734885153577,
+        "count": 87,
+        "missing": 0
+      }
+    },
+    "weekday_stats": {
+      "day_0": {
+        "count": 19,
+        "density_rate_mean": 16.63157894736842,
+        "occupied_seats_mean": 1.3157894736842106
+      },
+      "day_1": {
+        "count": 35,
+        "density_rate_mean": 20.67142857142857,
+        "occupied_seats_mean": 1.6857142857142857
+      },
+      "day_2": {
+        "count": 12,
+        "density_rate_mean": 38.375,
+        "occupied_seats_mean": 3.3333333333333335
+      },
+      "day_3": {
+        "count": 12,
+        "density_rate_mean": 28.833333333333332,
+        "occupied_seats_mean": 2.75
+      },
+      "day_4": {
+        "count": 9,
+        "density_rate_mean": 36.888888888888886,
+        "occupied_seats_mean": 3.0
+      }
+    }
+  },
+  "models": {
+    "available_models": [
+      "density",
+      "seats"
+    ],
+    "best_parameters": {
+      "density": {
+        "model_type": "gradient_boosting",
+        "n_estimators": 101,
+        "max_depth": 7,
+        "learning_rate": 0.011211630577020454,
+        "subsample": 0.8066724883370401,
+        "max_features": 0.5
+      },
+      "seats": {
+        "model_type": "elastic_net",
+        "alpha": 0.5714730150549772,
+        "l1_ratio": 0.5677760913584786,
+        "max_iter": 1044
+      }
+    },
+    "performance": {
+      "density": {
+        "model_type": "gradient_boosting",
+        "test_rmse": 17.558579344974493,
+        "test_mae": 15.366777410342467,
+        "test_r2": -0.016331048598634545,
+        "cv_rmse": 17.360572788866364,
+        "cv_std": 1.3700943243715022,
+        "overfitting_detected": false
+      },
+      "seats": {
+        "model_type": "elastic_net",
+        "test_rmse": 1.8476425101170793,
+        "test_mae": 1.5184794353370301,
+        "test_r2": 0.02578366917877195,
+        "cv_rmse": 1.4707939754873995,
+        "cv_std": 0.10446878657666105,
+        "overfitting_detected": true
+      }
+    },
+    "model_details": {
+      "density": {
+        "model_type": "GradientBoostingRegressor",
+        "parameters": {
+          "n_estimators": 101,
+          "learning_rate": 0.011211630577020454,
+          "loss": "squared_error",
+          "criterion": "friedman_mse",
+          "min_samples_split": 2,
+          "min_samples_leaf": 1,
+          "min_weight_fraction_leaf": 0.0,
+          "subsample": 0.8066724883370401,
+          "max_features": 0.5,
+          "max_depth": 7,
+          "min_impurity_decrease": 0.0,
+          "ccp_alpha": 0.0,
+          "init": null,
+          "random_state": 42,
+          "alpha": 0.9,
+          "verbose": 0,
+          "max_leaf_nodes": null,
+          "warm_start": false,
+          "validation_fraction": 0.1,
+          "n_iter_no_change": null,
+          "tol": 0.0001,
+          "n_features_in_": 9,
+          "n_trees_per_iteration_": 1,
+          "max_features_": 4,
+          "init_": "DummyRegressor",
+          "estimators_": 101,
+          "train_score_": 101,
+          "oob_improvement_": 101,
+          "oob_scores_": 101,
+          "oob_score_": 260.98984040165647,
+          "n_estimators_": 101
+        },
+        "feature_importance": {
+          "day_of_week": 0.31332465448489455,
+          "density_seats_ratio": 0.03111374167193332,
+          "is_monday": 0.0741443064567163,
+          "is_tuesday": 0.16563333064928049,
+          "is_wednesday": 0.05154840500985858,
+          "is_thursday": 0.024155311928183223,
+          "is_friday": 0.2545905622838345,
+          "is_early_week": 0.03743555440151387,
+          "is_mid_week": 0.04805413311378507
+        },
+        "confidence_interval": {}
+      },
+      "seats": {
+        "model_type": "ElasticNet",
+        "parameters": {
+          "alpha": 0.5714730150549772,
+          "l1_ratio": 0.5677760913584786,
+          "fit_intercept": true,
+          "precompute": false,
+          "max_iter": 1044,
+          "copy_X": true,
+          "tol": 0.0001,
+          "warm_start": false,
+          "positive": false,
+          "random_state": 42,
+          "selection": "cyclic",
+          "n_features_in_": 9,
+          "n_iter_": 21,
+          "coef_": 9,
+          "dual_gap_": 3.895293837041791e-06,
+          "intercept_": 2.046875
+        },
+        "feature_importance": null,
+        "confidence_interval": {}
+      }
+    },
+    "feature_names": [
+      "day_of_week",
+      "density_seats_ratio",
+      "is_monday",
+      "is_tuesday",
+      "is_wednesday",
+      "is_thursday",
+      "is_friday",
+      "is_early_week",
+      "is_mid_week",
+      "is_late_week"
+    ],
+    "usage_info": {
+      "prediction_range": {
+        "density_rate": {
+          "min": 0.0,
+          "max": 100.0,
+          "unit": "%"
+        },
+        "occupied_seats": {
+          "min": 0,
+          "max": 8,
+          "unit": "席"
+        }
+      },
+      "feature_description": {
+        "day_of_week": "曜日（0-4: 月-金）",
+        "is_monday": "月曜日フラグ",
+        "is_tuesday": "火曜日フラグ",
+        "is_wednesday": "水曜日フラグ",
+        "is_thursday": "木曜日フラグ",
+        "is_friday": "金曜日フラグ",
+        "is_early_week": "週前半フラグ（月火）",
+        "is_mid_week": "週中フラグ（水）",
+        "is_late_week": "週後半フラグ（木金）"
+      }
+    }
+  }
+}

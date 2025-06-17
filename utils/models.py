@@ -133,14 +133,13 @@ class MLPredictor:
         # 密度率予測と同じロジック
         return self.objective_density(trial, X_train, y_train, X_val, y_val)
     
-    def optimize_hyperparameters(self, target_type: str = 'both', n_trials: int = 100, use_feature_engineering: bool = True) -> Dict:
+    def optimize_hyperparameters(self, target_type: str = 'both', n_trials: int = 100) -> Dict:
         """
         Optunaを使ってハイパーパラメータを最適化
         
         Args:
             target_type: 'density', 'seats', 'both'
             n_trials: 最適化試行回数
-            use_feature_engineering: 特徴量エンジニアリングを使用するかどうか
             
         Returns:
             Dict: 最適化結果
@@ -148,7 +147,7 @@ class MLPredictor:
         logger.info("ハイパーパラメータ最適化を開始...")
         
         # データ準備
-        ml_data, X, y_density, y_seats = self.data_processor.prepare_ml_data(use_feature_engineering=use_feature_engineering)
+        ml_data, X, y_density, y_seats = self.data_processor.prepare_ml_data()
         
         results = {}
         
@@ -156,7 +155,7 @@ class MLPredictor:
             logger.info("密度率予測モデルの最適化中...")
             # 密度率予測の最適化（層化分割で過学習対策）
             X_train, X_val, y_train_density, y_val_density = train_test_split(
-                X, y_density, test_size=0.25, random_state=42, stratify=None  # 検証データを増やす
+                X, y_density, test_size=0.25, random_state=42, stratify=None
             )
             
             study_density = optuna.create_study(direction='minimize')
@@ -178,7 +177,7 @@ class MLPredictor:
             logger.info("占有座席数予測モデルの最適化中...")
             # 占有座席数予測の最適化（層化分割で過学習対策）
             X_train, X_val, y_train_seats, y_val_seats = train_test_split(
-                X, y_seats, test_size=0.25, random_state=42, stratify=None  # 検証データを増やす
+                X, y_seats, test_size=0.25, random_state=42, stratify=None
             )
             
             study_seats = optuna.create_study(direction='minimize')
@@ -198,20 +197,17 @@ class MLPredictor:
         
         return results
     
-    def train_best_models(self, use_feature_engineering: bool = True) -> Dict:
+    def train_best_models(self) -> Dict:
         """
         最適なパラメータでモデルを訓練
-        
-        Args:
-            use_feature_engineering: 特徴量エンジニアリングを使用するかどうか
-        
+            
         Returns:
             Dict: モデル性能評価結果
         """
         logger.info("最適パラメータでモデルを訓練中...")
         
         # データ準備
-        ml_data, X, y_density, y_seats = self.data_processor.prepare_ml_data(use_feature_engineering=use_feature_engineering)
+        ml_data, X, y_density, y_seats = self.data_processor.prepare_ml_data()
         
         results = {}
         
@@ -254,13 +250,16 @@ class MLPredictor:
             r2 = r2_score(y_test, y_pred)
             
             # クロスバリデーション（過学習対策で分割数を増やす）
-            kfold = KFold(n_splits=8, shuffle=True, random_state=42)  # 分割数を増やして過学習を検出
+            kfold = KFold(n_splits=8, shuffle=True, random_state=42)
             cv_scores = cross_val_score(model, X_train, y_train, cv=kfold, scoring='neg_mean_squared_error')
             cv_rmse = np.sqrt(-cv_scores.mean())
             cv_std = np.sqrt(-cv_scores).std()
             
+            # 過学習判定
+            overfitting_detected = abs(rmse - cv_rmse) > cv_std * 2
+            
             # 過学習警告
-            if abs(rmse - cv_rmse) > cv_std * 2:
+            if overfitting_detected:
                 logger.warning(f"密度率予測モデルで過学習の可能性があります。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
             else:
                 logger.info(f"密度率予測モデルの汎化性能は良好です。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
@@ -272,7 +271,7 @@ class MLPredictor:
                 'test_r2': r2,
                 'cv_rmse': cv_rmse,
                 'cv_std': cv_std,
-                'overfitting_detected': abs(rmse - cv_rmse) > cv_std * 2
+                'overfitting_detected': overfitting_detected
             }
             
             self.models['density'] = model
@@ -322,13 +321,16 @@ class MLPredictor:
             r2 = r2_score(y_test, y_pred)
             
             # クロスバリデーション（過学習対策で分割数を増やす）
-            kfold = KFold(n_splits=8, shuffle=True, random_state=42)  # 分割数を増やして過学習を検出
+            kfold = KFold(n_splits=8, shuffle=True, random_state=42)
             cv_scores = cross_val_score(model, X_train, y_train, cv=kfold, scoring='neg_mean_squared_error')
             cv_rmse = np.sqrt(-cv_scores.mean())
             cv_std = np.sqrt(-cv_scores).std()
             
+            # 過学習判定
+            overfitting_detected = abs(rmse - cv_rmse) > cv_std * 2
+            
             # 過学習警告
-            if abs(rmse - cv_rmse) > cv_std * 2:
+            if overfitting_detected:
                 logger.warning(f"占有座席数予測モデルで過学習の可能性があります。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
             else:
                 logger.info(f"占有座席数予測モデルの汎化性能は良好です。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
@@ -340,7 +342,7 @@ class MLPredictor:
                 'test_r2': r2,
                 'cv_rmse': cv_rmse,
                 'cv_std': cv_std,
-                'overfitting_detected': abs(rmse - cv_rmse) > cv_std * 2
+                'overfitting_detected': overfitting_detected
             }
             
             self.models['seats'] = model
@@ -351,7 +353,7 @@ class MLPredictor:
     
     def predict(self, day_of_week: int) -> Dict:
         """
-        曜日から密度率と占有座席数を予測（簡素化された特徴量エンジニアリング対応）
+        曜日から密度率と占有座席数を予測
         
         Args:
             day_of_week: 曜日（0-4: 月-金）
@@ -362,7 +364,7 @@ class MLPredictor:
         if not self.models:
             raise ValueError("モデルが訓練されていません。先にtrain_best_models()を実行してください。")
         
-        # 簡素化された特徴量を手動で作成（10個の特徴量）
+        # 特徴量を手動で作成
         try:
             # 基本的な特徴量を作成
             features = np.zeros((1, 10))  # 10個の特徴量
@@ -428,7 +430,7 @@ class MLPredictor:
         
         return predictions
     
-    def save_models(self, model_dir: str = 'api/') -> Dict[str, str]:
+    def save_models(self, model_dir: str = 'utils/joblib') -> Dict[str, str]:
         """
         訓練済みモデルを保存
         
@@ -466,7 +468,7 @@ class MLPredictor:
         logger.info(f"モデルを保存しました: {saved_files}")
         return saved_files
     
-    def load_models(self, model_dir: str = 'models') -> bool:
+    def load_models(self, model_dir: str = 'utils/joblib') -> bool:
         """
         保存済みモデルを読み込み
         
@@ -511,59 +513,92 @@ class MLPredictor:
         Returns:
             Dict: モデル情報
         """
+        # 基本情報
         info = {
             'available_models': list(self.models.keys()),
             'best_parameters': self.best_params,
             'model_performance': self.model_performance,
-            'feature_names': ['day_of_week'],
-            'note': '曜日（0-4: 月-金）のみから予測を実行します。時間情報は使用しません。'
+            'feature_names': self.data_processor.get_feature_columns() if hasattr(self, 'data_processor') else ['day_of_week']
+        }
+        
+        # モデルの詳細情報を追加
+        if self.models:
+            model_details = {}
+            for target, model in self.models.items():
+                model_type = type(model).__name__
+                model_details[target] = {
+                    'model_type': model_type,
+                    'parameters': {},
+                    'feature_importance': None,
+                    'confidence_interval': {}
+                }
+                
+                # パラメータ取得（シリアライズ可能なプリミティブ型のみ）
+                try:
+                    safe_params = {}
+                    for key, value in model.__dict__.items():
+                        if key.startswith('_') or callable(value):
+                            continue
+                        # シリアライズ可能な型のみ抽出
+                        if isinstance(value, (int, float, str, bool, list, tuple, dict)) or value is None:
+                            safe_params[key] = value
+                        elif hasattr(value, '__len__'):
+                            try:
+                                safe_params[key] = len(value)  # 長さのみを記録
+                            except:
+                                pass
+                        else:
+                            safe_params[key] = str(type(value).__name__)  # 型名のみを記録
+                    
+                    model_details[target]['parameters'] = safe_params
+                except:
+                    pass
+                
+                # 特徴量重要度（ツリーモデルの場合）
+                try:
+                    if hasattr(model, 'feature_importances_'):
+                        feature_names = self.data_processor.get_feature_columns()
+                        importances = model.feature_importances_
+                        # DataFrameにせず、辞書形式で出力
+                        importance_dict = {feature_names[i]: float(importance) 
+                                          for i, importance in enumerate(importances)
+                                          if i < len(feature_names)}
+                        model_details[target]['feature_importance'] = importance_dict
+                except Exception:
+                    pass
+            
+            info['model_details'] = model_details
+            
+            # 予測パフォーマンスのサマリー
+            performance_summary = {}
+            for target, perf in self.model_performance.items():
+                metrics = {}
+                for metric, value in perf.items():
+                    try:
+                        if isinstance(value, (int, float)):
+                            metrics[metric] = float(value)
+                    except:
+                        pass
+                performance_summary[target] = metrics
+            info['performance_summary'] = performance_summary
+            
+        # 実用的な情報を追加
+        info['usage_info'] = {
+            'prediction_range': {
+                'density_rate': {'min': 0.0, 'max': 100.0, 'unit': '%'},
+                'occupied_seats': {'min': 0, 'max': 8, 'unit': '席'}
+            },
+            'feature_description': {
+                'day_of_week': '曜日（0-4: 月-金）',
+                'is_monday': '月曜日フラグ',
+                'is_tuesday': '火曜日フラグ',
+                'is_wednesday': '水曜日フラグ',
+                'is_thursday': '木曜日フラグ',
+                'is_friday': '金曜日フラグ',
+                'is_early_week': '週前半フラグ（月火）',
+                'is_mid_week': '週中フラグ（水）',
+                'is_late_week': '週後半フラグ（木金）'
+            }
         }
         
         return info
-
-if __name__ == "__main__":
-    """
-    MLモデルのテスト実行
-    """
-    import logging
-    
-    # ログ設定
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    predictor = MLPredictor()
-    
-    # 保存済みモデルがあるかチェック
-    if predictor.load_models():
-        print("=== 保存済みモデル情報 ===")
-        model_info = predictor.get_model_info()
-        print(f"利用可能なモデル: {model_info['available_models']}")
-        
-        if model_info['model_performance']:
-            print("\n=== モデル性能 ===")
-            for target, performance in model_info['model_performance'].items():
-                print(f"{target}モデル:")
-                for metric, value in performance.items():
-                    if isinstance(value, float):
-                        print(f"  {metric}: {value:.4f}")
-                    else:
-                        print(f"  {metric}: {value}")
-        
-        # 予測テスト
-        print("\n=== 予測テスト ===")
-        weekday_names = {0: "月曜", 1: "火曜", 2: "水曜", 3: "木曜", 4: "金曜"}
-        
-        for day in range(5):
-            try:
-                predictions = predictor.predict(day_of_week=day)
-                print(f"{weekday_names[day]}: {predictions}")
-            except Exception as e:
-                print(f"{weekday_names[day]}: エラー - {e}")
-        
-        print("\n✅ モデルテスト完了")
-    else:
-        print("❌ 保存済みモデルが見つかりません。")
-        print("先に以下のコマンドでモデルを訓練してください:")
-        print("python src/ml/train.py --mode train --n-trials 30")

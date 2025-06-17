@@ -11,16 +11,13 @@ def get_supabase_config():
     try:
         supabase_url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
         service_role_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
-        anon_key = os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')
-                
+        anon_key = os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY')        
         if service_role_key:
-            print("SERVICE_ROLE_KEYを利用します")
             return supabase_url, service_role_key
         elif anon_key:
-            print("ANON_KEYを利用します") 
             return supabase_url, anon_key
         else:
-            print("No valid keys found")
+            print("Supabaseの設定が見つかりません。")
             return None, None
             
     except Exception as e:
