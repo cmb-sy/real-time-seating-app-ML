@@ -156,16 +156,3 @@ The ML models are optimized using Optuna for hyperparameter tuning, achieving:
 ## 📄 License
 
 MIT
-
-## 👥 Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
-
-```bash
-lsof -ti:8000 | xargs kill -9
-python3 -u api/index.py'
-```
