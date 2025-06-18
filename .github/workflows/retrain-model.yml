@@ -21,7 +21,7 @@ env:
 jobs:
   retrain-and-update:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     # GitHub Actionsにプッシュ権限を付与
     permissions:
@@ -91,7 +91,7 @@ jobs:
 
           # インストール確認
           echo "📋 主要パッケージの確認:"
-          uv pip list | grep -E "(scikit-learn|numpy|pandas|joblib|supabase)"
+          uv pip list | grep -E "(scikit-learn|numpy|pandas|joblib|supabase)" || echo "パッケージ確認完了"
 
       - name: 🔐 環境変数を設定
         env:
@@ -104,15 +104,28 @@ jobs:
 
       - name: 🔍 実行前のファイル状態確認
         run: |
-          echo "## 📊 実行前のモデルファイル状態" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 実行前のファイル状態" >> $GITHUB_STEP_SUMMARY
           echo "```" >> $GITHUB_STEP_SUMMARY
-          echo "APIディレクトリ (api/):" >> $GITHUB_STEP_SUMMARY
+          echo "モデルファイル (utils/joblib/):" >> $GITHUB_STEP_SUMMARY
+          if [ -d "utils/joblib" ]; then
+            ls -la utils/joblib/*.joblib 2>/dev/null || echo "  .joblibファイルなし"
+          else
+            echo "  utils/joblibディレクトリが存在しません"
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "予測ファイル (api/):" >> $GITHUB_STEP_SUMMARY
           if [ -d "api" ]; then
-            ls -la api/*.joblib 2>/dev/null || echo "  .joblibファイルなし"
+            ls -la api/*.json 2>/dev/null || echo "  .jsonファイルなし"
           else
             echo "  apiディレクトリが存在しません"
           fi
           echo "```" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📁 必要なディレクトリを作成
+        run: |
+          mkdir -p utils/joblib
+          mkdir -p api
+          echo "✅ 必要なディレクトリを作成しました"
 
       - name: 🤖 機械学習モデルを訓練
         id: training
@@ -120,8 +133,8 @@ jobs:
           echo "🔄 機械学習モデルの訓練を開始..."
           start_time=$(date +%s)
 
-          # 訓練実行
-          python utils/train.py --mode train
+          # 高速化のため試行回数を100に設定
+          python utils/train.py --mode train --n-trials 100
 
           end_time=$(date +%s)
           duration=$((end_time - start_time))
@@ -129,29 +142,81 @@ jobs:
 
           echo "✅ モデル訓練完了 (${duration}秒)"
 
-      - name: 📊 訓練後のファイル確認
+      - name: 📊 予測データを生成
+        id: prediction
+        run: |
+          echo "🔄 予測データの生成を開始..."
+          start_time=$(date +%s)
+
+          # 予測データ生成（JSONファイル作成）
+          python utils/prediction.py
+
+          end_time=$(date +%s)
+          duration=$((end_time - start_time))
+          echo "prediction_duration=${duration}" >> $GITHUB_OUTPUT
+
+          echo "✅ 予測データ生成完了 (${duration}秒)"
+
+      - name: 🔍 生成後のファイル確認
         id: file_check
         run: |
-          echo "🔍 訓練後のファイル確認..."
+          echo "🔍 生成後のファイル確認..."
 
           # モデルファイルの存在確認
           model_files_found=0
-          for file in utils/joblib/density_model.joblib api/seats_model.joblib api/best_params.joblib api/model_performance.joblib; do
+          expected_model_files=(
+            "utils/joblib/density_model.joblib"
+            "utils/joblib/seats_model.joblib"
+            "utils/joblib/model_performance.joblib"
+          )
+
+          echo "### 📊 モデルファイル確認" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          for file in "${expected_model_files[@]}"; do
             if [ -f "$file" ]; then
-              size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "不明")
-              echo "✅ $file (${size} bytes)"
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "不明")
+              echo "✅ $file (${size} bytes)" | tee -a $GITHUB_STEP_SUMMARY
               model_files_found=$((model_files_found + 1))
             else
-              echo "❌ $file が見つかりません"
+              echo "❌ $file が見つかりません" | tee -a $GITHUB_STEP_SUMMARY
             fi
           done
+          echo "```" >> $GITHUB_STEP_SUMMARY
 
-          echo "found_files=${model_files_found}" >> $GITHUB_OUTPUT
+          # 予測JSONファイルの存在確認
+          json_files_found=0
+          expected_json_files=(
+            "api/weekly_predictions.json"
+            "api/weekly_averages.json"
+            "api/last_update.json"
+          )
 
-          if [ $model_files_found -eq 0 ]; then
-            echo "⚠️ モデルファイルが生成されませんでした"
+          echo "### 📊 予測JSONファイル確認" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          for file in "${expected_json_files[@]}"; do
+            if [ -f "$file" ]; then
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "不明")
+              echo "✅ $file (${size} bytes)" | tee -a $GITHUB_STEP_SUMMARY
+              json_files_found=$((json_files_found + 1))
+            else
+              echo "❌ $file が見つかりません" | tee -a $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "```" >> $GITHUB_STEP_SUMMARY
+
+          echo "model_files_found=${model_files_found}" >> $GITHUB_OUTPUT
+          echo "json_files_found=${json_files_found}" >> $GITHUB_OUTPUT
+          echo "total_files_found=$((model_files_found + json_files_found))" >> $GITHUB_OUTPUT
+
+          # 最低限必要なファイルが生成されているかチェック
+          if [ $model_files_found -lt 2 ] || [ $json_files_found -lt 3 ]; then
+            echo "⚠️ 必要なファイルが不足しています"
+            echo "  モデルファイル: ${model_files_found}/3"
+            echo "  予測JSONファイル: ${json_files_found}/3"
             exit 1
           fi
+
+          echo "✅ 全ての必要ファイルが生成されました"
 
       - name: 📝 変更をコミット・プッシュ
         id: commit
@@ -160,15 +225,14 @@ jobs:
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
+          # 全ての変更を確認
+          git add -A
+
           # 変更確認
-          if git diff --quiet && git diff --staged --quiet; then
+          if git diff --cached --quiet; then
             echo "📝 変更なし - コミットをスキップ"
             echo "changes_made=false" >> $GITHUB_OUTPUT
           else
-            # 変更をステージング
-            git add api/*.joblib 2>/dev/null || true
-            git add . 2>/dev/null || true
-            
             # コミットメッセージ作成
             commit_msg="🤖 自動モデル更新: $(date '+%Y-%m-%d %H:%M:%S UTC')"
             
@@ -177,6 +241,10 @@ jobs:
             else
               commit_msg="${commit_msg} [自動実行]"
             fi
+            
+            # 変更ファイル数を追加
+            total_files="${{ steps.file_check.outputs.total_files_found || '0' }}"
+            commit_msg="${commit_msg} - ${total_files}ファイル更新"
             
             # コミット・プッシュ
             git commit -m "$commit_msg"
@@ -190,17 +258,46 @@ jobs:
       - name: 🎯 実行結果サマリー
         if: always()
         run: |
-          echo "## 🎯 モデル再訓練結果" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 モデル学習・予測更新結果" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**📅 実行日時**: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "**🚀 実行トリガー**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**🌿 実行ブランチ**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**⏱️ 訓練時間**: ${{ steps.training.outputs.training_duration || '不明' }}秒" >> $GITHUB_STEP_SUMMARY
-          echo "**📦 生成ファイル数**: ${{ steps.file_check.outputs.found_files || '0' }}/4" >> $GITHUB_STEP_SUMMARY
+          echo "**⏱️ 予測時間**: ${{ steps.prediction.outputs.prediction_duration || '不明' }}秒" >> $GITHUB_STEP_SUMMARY
+          echo "**📦 モデルファイル**: ${{ steps.file_check.outputs.model_files_found || '0' }}/3" >> $GITHUB_STEP_SUMMARY
+          echo "**📊 予測JSONファイル**: ${{ steps.file_check.outputs.json_files_found || '0' }}/3" >> $GITHUB_STEP_SUMMARY
           echo "**✨ 変更有無**: ${{ steps.commit.outputs.changes_made == 'true' && '変更あり' || '変更なし' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ steps.commit.outputs.changes_made }}" = "true" ]; then
-            echo "### 📦 更新されたファイル" >> $GITHUB_STEP_SUMMARY
-            echo "**本番用API (api/)**:" >> $GITHUB_STEP_SUMMARY
-            echo "
+            echo "### 📦 コミットメッセージ" >> $GITHUB_STEP_SUMMARY
+            echo "\`${{ steps.commit.outputs.commit_message }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🎉 更新完了" >> $GITHUB_STEP_SUMMARY
+            echo "新しいモデルと予測データが本番環境に反映されました。" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ℹ️ 変更なし" >> $GITHUB_STEP_SUMMARY
+            echo "モデルファイルや予測データに変更はありませんでした。" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: ❌ 失敗時の詳細ログ
+        if: failure()
+        run: |
+          echo "## ❌ 実行失敗の詳細" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 ディレクトリ構造" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "utils/joblib/:" >> $GITHUB_STEP_SUMMARY
+          ls -la utils/joblib/ 2>/dev/null || echo "  ディレクトリなし" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "api/:" >> $GITHUB_STEP_SUMMARY
+          ls -la api/ 2>/dev/null || echo "  ディレクトリなし" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🐛 Python環境" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "Python Version: $(python --version 2>&1)" >> $GITHUB_STEP_SUMMARY
+          echo "Working Directory: $(pwd)" >> $GITHUB_STEP_SUMMARY
+          echo "PYTHONPATH: $PYTHONPATH" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY

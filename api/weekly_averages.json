@@ -15,13 +15,13 @@
     {
       "weekday": 2,
       "weekday_name": "水曜日",
-      "occupancy_rate": 0.41,
+      "occupancy_rate": 0.43,
       "occupied_seats": 4
     },
     {
       "weekday": 3,
       "weekday_name": "木曜日",
-      "occupancy_rate": 0.29,
+      "occupancy_rate": 0.3,
       "occupied_seats": 3
     },
     {

@@ -20,57 +20,6 @@ if os.path.exists(utils_dir):
     sys.path.insert(0, utils_dir)
 import config
 
-# 独立した特徴量エンジニアリング関数
-def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    特徴量エンジニアリング（曜日情報と統計的特徴量）
-    
-    Args:
-        df: 元データ（day_of_week, density_rate, occupied_seatsを含むDataFrame）
-        
-    Returns:
-        pd.DataFrame: 特徴量エンジニアリング後のデータ
-    """
-    feature_df = df.copy()
-    
-    # 1. 曜日ダミー変数（基本的な特徴量）
-    feature_df['is_monday'] = (feature_df['day_of_week'] == 0).astype(int)
-    feature_df['is_tuesday'] = (feature_df['day_of_week'] == 1).astype(int)
-    feature_df['is_wednesday'] = (feature_df['day_of_week'] == 2).astype(int)
-    feature_df['is_thursday'] = (feature_df['day_of_week'] == 3).astype(int)
-    feature_df['is_friday'] = (feature_df['day_of_week'] == 4).astype(int)
-    
-    # 2. 週の分類（月火・水・木金の3グループ）
-    feature_df['is_early_week'] = (feature_df['day_of_week'].isin([0, 1])).astype(int)  # 月火
-    feature_df['is_mid_week'] = (feature_df['day_of_week'] == 2).astype(int)           # 水
-    feature_df['is_late_week'] = (feature_df['day_of_week'].isin([3, 4])).astype(int)  # 木金
-    
-    feature_df = feature_df.fillna(0)
-
-    return feature_df
-
-# 特徴量カラム名を取得する関数
-def get_feature_columns() -> List[str]:
-    """
-    機械学習で使用する特徴量カラムのリスト
-    
-    Returns:
-        List[str]: 特徴量カラム名のリスト
-    """
-    features = [   
-        'day_of_week',           # 基本的な曜日情報
-        'density_seats_ratio',   # 密度率と座席数の比率
-        'is_monday',             # 曜日ダミー変数
-        'is_tuesday',
-        'is_wednesday', 
-        'is_thursday',
-        'is_friday',
-        'is_early_week',         # 週前半フラグ（月火）
-        'is_mid_week',           # 週中フラグ（水）
-        'is_late_week',          # 週後半フラグ（木金）
-    ]
-    return features
-
 class MLDataProcessor:
     """機械学習用データ処理クラス"""
     def __init__(self):
@@ -110,6 +59,26 @@ class MLDataProcessor:
         except Exception as e:
             raise Exception(f"データ取得エラー: {e}")
     
+    def get_feature_columns(self) -> List[str]:
+        """
+        特徴量カラム名のリストを取得
+        
+        Returns:
+            List[str]: 特徴量カラム名のリスト
+        """
+        return [
+            'day_of_week',
+            'density_seats_ratio',
+            'is_monday',
+            'is_tuesday',
+            'is_wednesday',
+            'is_thursday',
+            'is_friday',
+            'is_early_week',
+            'is_mid_week',
+            'is_late_week'
+        ]
+    
     def create_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         特徴量エンジニアリング（曜日情報と統計的特徴量）
@@ -120,20 +89,29 @@ class MLDataProcessor:
         Returns:
             pd.DataFrame: 特徴量エンジニアリング後のデータ
         """
-        # 独立した関数を使用
-        feature_df = engineer_features(df)
+        feature_df = df.copy()
         
+        # 密度率と座席数の比率特徴量を作成
+        feature_df['density_seats_ratio'] = (
+            feature_df['density_rate'] / (feature_df['occupied_seats'] + 1)  # ゼロ除算回避
+        )
+
+        # 1. 曜日ダミー変数（基本的な特徴量）
+        feature_df['is_monday'] = (feature_df['day_of_week'] == 0).astype(int)
+        feature_df['is_tuesday'] = (feature_df['day_of_week'] == 1).astype(int)
+        feature_df['is_wednesday'] = (feature_df['day_of_week'] == 2).astype(int)
+        feature_df['is_thursday'] = (feature_df['day_of_week'] == 3).astype(int)
+        feature_df['is_friday'] = (feature_df['day_of_week'] == 4).astype(int)
+
+        # 2. 週の分類（月火・水・木金の3グループ）
+        feature_df['is_early_week'] = (feature_df['day_of_week'].isin([0, 1])).astype(int)  # 月火
+        feature_df['is_mid_week'] = (feature_df['day_of_week'] == 2).astype(int)           # 水
+        feature_df['is_late_week'] = (feature_df['day_of_week'].isin([3, 4])).astype(int)  # 木金
+
+        feature_df = feature_df.fillna(0)
+
         return feature_df
     
-    def get_feature_columns(self) -> List[str]:
-        """
-        機械学習で使用する特徴量カラムのリスト
-        
-        Returns:
-            List[str]: 特徴量カラム名のリスト
-        """
-        # 独立した関数を使用
-        return get_feature_columns()
     
     def prepare_ml_data(self) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -150,7 +128,7 @@ class MLDataProcessor:
         
         # 特徴量エンジニアリングを実行
         ml_data = self.create_advanced_features(ml_data)
-        
+
         feature_columns = self.get_feature_columns()
         
         # 存在する特徴量のみを選択（エラー回避）

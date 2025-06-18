@@ -1,15 +1,16 @@
 """
 機械学習モデルモジュール
-Optunaを使ったハイパーパラメータ最適化と予測機能
+Optunaを使ったハイパーパラメータ最適化とアンサンブル予測機能
 """
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, cross_val_score, KFold
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, VotingRegressor
 from sklearn.linear_model import Ridge, ElasticNet
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 import optuna
 import joblib
 import logging
@@ -22,17 +23,17 @@ sys.path.append('src/ml')
 logger = logging.getLogger(__name__)
 
 class MLPredictor:
-    """機械学習予測クラス"""
+    """機械学習予測クラス（アンサンブル学習対応）"""
     
     def __init__(self):
         """初期化"""
         self.models = {}
-        self.scalers = {}
+        self.ensemble_models = {}
         self.best_params = {}
         self.model_performance = {}
         self.data_processor = MLDataProcessor()
         
-        # 使用するモデル一覧
+        # 使用するモデル一覧（精度向上のためXGBoostを追加検討）
         self.model_types = {
             'random_forest': RandomForestRegressor,
             'gradient_boosting': GradientBoostingRegressor,
@@ -40,9 +41,25 @@ class MLPredictor:
             'elastic_net': ElasticNet
         }
     
-    def objective_density(self, trial, X_train, y_train, X_val, y_val):
+    def _create_model_with_params(self, model_name: str, params: dict):
+        """パラメータでモデルを作成"""
+        clean_params = params.copy()
+        clean_params.pop('model_type', None)
+        
+        if model_name == 'random_forest':
+            return RandomForestRegressor(**clean_params, random_state=42, n_jobs=-1)
+        elif model_name == 'gradient_boosting':
+            return GradientBoostingRegressor(**clean_params, random_state=42)
+        elif model_name == 'ridge':
+            return Ridge(**clean_params)
+        elif model_name == 'elastic_net':
+            return ElasticNet(**clean_params, random_state=42)
+        else:
+            raise ValueError(f"未対応のモデルタイプ: {model_name}")
+    
+    def objective_function(self, trial, X_train, y_train, X_val, y_val):
         """
-        密度率予測用の最適化目的関数
+        統一された最適化目的関数（精度向上のため改良）
         
         Args:
             trial: Optunaトライアル
@@ -50,90 +67,78 @@ class MLPredictor:
             X_val, y_val: 検証データ
             
         Returns:
-            float: 検証スコア（RMSE）
+            float: 検証スコア（RMSE + 正則化項）
         """
         # モデルタイプを選択
         model_name = trial.suggest_categorical('model_type', 
                                               ['random_forest', 'gradient_boosting', 'ridge', 'elastic_net'])
         
+        # より厳密なハイパーパラメータ範囲で精度向上
         if model_name == 'random_forest':
             model = RandomForestRegressor(
-                n_estimators=trial.suggest_int('n_estimators', 50, 200),  
-                max_depth=trial.suggest_int('max_depth', 3, 15),  
-                min_samples_split=trial.suggest_int('min_samples_split', 5, 20),  
-                min_samples_leaf=trial.suggest_int('min_samples_leaf', 2, 10),  
-                max_features=trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.5, 0.8]),  
+                n_estimators=trial.suggest_int('n_estimators', 100, 500),  # 範囲拡大
+                max_depth=trial.suggest_int('max_depth', 3, 20),  # 範囲拡大
+                min_samples_split=trial.suggest_int('min_samples_split', 2, 15),  
+                min_samples_leaf=trial.suggest_int('min_samples_leaf', 1, 8),  
+                max_features=trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5, 0.8]),  
+                bootstrap=trial.suggest_categorical('bootstrap', [True, False]),  # 新規追加
                 random_state=42,
                 n_jobs=-1
             )
         elif model_name == 'gradient_boosting':
             model = GradientBoostingRegressor(
-                n_estimators=trial.suggest_int('n_estimators', 50, 200),  
-                max_depth=trial.suggest_int('max_depth', 3, 8),  
-                learning_rate=trial.suggest_float('learning_rate', 0.01, 0.2),  
-                subsample=trial.suggest_float('subsample', 0.6, 0.9),  
-                max_features=trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.5, 0.8]),
-                validation_fraction=0.1,  # 早期停止用の検証データ
-                n_iter_no_change=10,  # 早期停止
+                n_estimators=trial.suggest_int('n_estimators', 100, 500),  # 範囲拡大
+                max_depth=trial.suggest_int('max_depth', 3, 10),  
+                learning_rate=trial.suggest_float('learning_rate', 0.005, 0.3, log=True),  # log scaleで最適化
+                subsample=trial.suggest_float('subsample', 0.5, 1.0),  
+                max_features=trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5, 0.8]),
+                validation_fraction=0.15,  # 検証データ割合を調整
+                n_iter_no_change=15,  # 早期停止を緩和
                 random_state=42
             )
         elif model_name == 'ridge':
             model = Ridge(
-                alpha=trial.suggest_float('alpha', 1e-2, 1e2, log=True),
-                max_iter=trial.suggest_int('max_iter', 1000, 5000)
+                alpha=trial.suggest_float('alpha', 1e-3, 1e3, log=True),  # 範囲拡大
+                max_iter=trial.suggest_int('max_iter', 2000, 8000),  # 範囲拡大
+                solver=trial.suggest_categorical('solver', ['auto', 'svd', 'cholesky', 'lsqr'])  # ソルバー最適化
             )
         elif model_name == 'elastic_net':
             model = ElasticNet(
-                alpha=trial.suggest_float('alpha', 1e-2, 1e2, log=True),  
-                l1_ratio=trial.suggest_float('l1_ratio', 0.1, 0.9),  
-                max_iter=trial.suggest_int('max_iter', 1000, 5000),
+                alpha=trial.suggest_float('alpha', 1e-3, 1e3, log=True),  # 範囲拡大
+                l1_ratio=trial.suggest_float('l1_ratio', 0.01, 0.99),  # 範囲拡大
+                max_iter=trial.suggest_int('max_iter', 2000, 10000),  # 範囲拡大
+                selection=trial.suggest_categorical('selection', ['cyclic', 'random']),  # 新規追加
                 random_state=42
             )
         
-        # モデル訓練
+        # モデル訓練（線形モデルは統一スケーラーを使用）
         if model_name in ['ridge', 'elastic_net']:
-            # 線形モデルにはスケーリングを適用
             scaler = StandardScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_val_scaled = scaler.transform(X_val)
             model.fit(X_train_scaled, y_train)
             y_pred = model.predict(X_val_scaled)
+            y_train_pred = model.predict(X_train_scaled)
         else:
             model.fit(X_train, y_train)
             y_pred = model.predict(X_val)
-        
-        # RMSE計算
-        rmse = np.sqrt(mean_squared_error(y_val, y_pred))
-        
-        # 過学習チェック: 訓練データでの予測も計算
-        if model_name in ['ridge', 'elastic_net']:
-            y_train_pred = model.predict(X_train_scaled)
-        else:
             y_train_pred = model.predict(X_train)
         
+        # 評価指標計算
+        val_rmse = np.sqrt(mean_squared_error(y_val, y_pred))
         train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
         
-        # 過学習ペナルティ: 訓練誤差と検証誤差の差が大きい場合にペナルティ
-        overfitting_penalty = max(0, (train_rmse - rmse) / rmse * 0.1)
+        # 過学習ペナルティ（より厳密に）
+        overfitting_penalty = max(0, (train_rmse - val_rmse) / (val_rmse + 1e-8)) * 0.2
         
-        return rmse + overfitting_penalty
-    
-    def objective_seats(self, trial, X_train, y_train, X_val, y_val):
-        """
-        占有座席数予測用の最適化目的関数
+        # 予測値の妥当性チェック（異常値ペナルティ）
+        anomaly_penalty = 0
+        if np.any(y_pred < 0) or np.any(y_pred > 200):  # 異常値検出
+            anomaly_penalty = 0.5
         
-        Args:
-            trial: Optunaトライアル
-            X_train, y_train: 訓練データ
-            X_val, y_val: 検証データ
-            
-        Returns:
-            float: 検証スコア（RMSE）
-        """
-        # 密度率予測と同じロジック
-        return self.objective_density(trial, X_train, y_train, X_val, y_val)
+        return val_rmse + overfitting_penalty + anomaly_penalty
     
-    def optimize_hyperparameters(self, target_type: str = 'both', n_trials: int = 100) -> Dict:
+    def optimize_hyperparameters(self, target_type: str = 'both', n_trials: int = 200) -> Dict:
         """
         Optunaを使ってハイパーパラメータを最適化
         
@@ -144,7 +149,7 @@ class MLPredictor:
         Returns:
             Dict: 最適化結果
         """
-        logger.info("ハイパーパラメータ最適化を開始...")
+        logger.info("高精度ハイパーパラメータ最適化を開始...")
         
         # データ準備
         ml_data, X, y_density, y_seats = self.data_processor.prepare_ml_data()
@@ -153,21 +158,29 @@ class MLPredictor:
         
         if target_type in ['density', 'both']:
             logger.info("密度率予測モデルの最適化中...")
-            # 密度率予測の最適化（層化分割で過学習対策）
+            
+            # 分割
             X_train, X_val, y_train_density, y_val_density = train_test_split(
-                X, y_density, test_size=0.25, random_state=42, stratify=None
+                X, y_density, test_size=0.2, random_state=42, shuffle=True
             )
             
-            study_density = optuna.create_study(direction='minimize')
+            # Optuna最適化
+            study_density = optuna.create_study(
+                direction='minimize',
+                sampler=optuna.samplers.TPESampler(seed=42),  # TPEサンプラーで精度向上
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=20)  # 早期プルーニング
+            )
             study_density.optimize(
-                lambda trial: self.objective_density(trial, X_train, y_train_density, X_val, y_val_density),
-                n_trials=n_trials
+                lambda trial: self.objective_function(trial, X_train, y_train_density, X_val, y_val_density),
+                n_trials=n_trials,
+                timeout=3600  # 1時間のタイムアウト
             )
             
             results['density'] = {
                 'best_params': study_density.best_params,
                 'best_score': study_density.best_value,
-                'n_trials': len(study_density.trials)
+                'n_trials': len(study_density.trials),
+                'best_trial': study_density.best_trial.number
             }
             
             self.best_params['density'] = study_density.best_params
@@ -175,21 +188,27 @@ class MLPredictor:
         
         if target_type in ['seats', 'both']:
             logger.info("占有座席数予測モデルの最適化中...")
-            # 占有座席数予測の最適化（層化分割で過学習対策）
+            
             X_train, X_val, y_train_seats, y_val_seats = train_test_split(
-                X, y_seats, test_size=0.25, random_state=42, stratify=None
+                X, y_seats, test_size=0.2, random_state=42, shuffle=True
             )
             
-            study_seats = optuna.create_study(direction='minimize')
+            study_seats = optuna.create_study(
+                direction='minimize',
+                sampler=optuna.samplers.TPESampler(seed=42),
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=20)
+            )
             study_seats.optimize(
-                lambda trial: self.objective_seats(trial, X_train, y_train_seats, X_val, y_val_seats),
-                n_trials=n_trials
+                lambda trial: self.objective_function(trial, X_train, y_train_seats, X_val, y_val_seats),
+                n_trials=n_trials,
+                timeout=3600
             )
             
             results['seats'] = {
                 'best_params': study_seats.best_params,
                 'best_score': study_seats.best_value,
-                'n_trials': len(study_seats.trials)
+                'n_trials': len(study_seats.trials),
+                'best_trial': study_seats.best_trial.number
             }
             
             self.best_params['seats'] = study_seats.best_params
@@ -199,12 +218,12 @@ class MLPredictor:
     
     def train_best_models(self) -> Dict:
         """
-        最適なパラメータでモデルを訓練
+        最適なパラメータでモデルを訓練（アンサンブル学習対応）
             
         Returns:
             Dict: モデル性能評価結果
         """
-        logger.info("最適パラメータでモデルを訓練中...")
+        logger.info("アンサンブルモデルを最適パラメータで訓練中...")
         
         # データ準備
         ml_data, X, y_density, y_seats = self.data_processor.prepare_ml_data()
@@ -213,147 +232,145 @@ class MLPredictor:
         
         # 密度率予測モデル
         if 'density' in self.best_params:
-            model_params = self.best_params['density'].copy()
-            model_type = model_params.pop('model_type')
-            
-            # モデルインスタンス作成
-            if model_type == 'random_forest':
-                model = RandomForestRegressor(**model_params, random_state=42)
-            elif model_type == 'gradient_boosting':
-                model = GradientBoostingRegressor(**model_params, random_state=42)
-            elif model_type == 'ridge':
-                model = Ridge(**model_params)
-            elif model_type == 'elastic_net':
-                model = ElasticNet(**model_params, random_state=42)
-            
-            # 訓練・テストデータ分割（過学習対策でテストデータを増やす）
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y_density, test_size=0.25, random_state=42
-            )
-            
-            # スケーリング（線形モデルの場合）
-            if model_type in ['ridge', 'elastic_net']:
-                scaler = StandardScaler()
-                X_train_scaled = scaler.fit_transform(X_train)
-                X_test_scaled = scaler.transform(X_test)
-                model.fit(X_train_scaled, y_train)
-                y_pred = model.predict(X_test_scaled)
-                self.scalers['density'] = scaler
-            else:
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-            
-            # 評価指標計算
-            mse = mean_squared_error(y_test, y_pred)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, y_pred)
-            r2 = r2_score(y_test, y_pred)
-            
-            # クロスバリデーション（過学習対策で分割数を増やす）
-            kfold = KFold(n_splits=8, shuffle=True, random_state=42)
-            cv_scores = cross_val_score(model, X_train, y_train, cv=kfold, scoring='neg_mean_squared_error')
-            cv_rmse = np.sqrt(-cv_scores.mean())
-            cv_std = np.sqrt(-cv_scores).std()
-            
-            # 過学習判定
-            overfitting_detected = abs(rmse - cv_rmse) > cv_std * 2
-            
-            # 過学習警告
-            if overfitting_detected:
-                logger.warning(f"密度率予測モデルで過学習の可能性があります。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
-            else:
-                logger.info(f"密度率予測モデルの汎化性能は良好です。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
-            
-            results['density'] = {
-                'model_type': model_type,
-                'test_rmse': rmse,
-                'test_mae': mae,
-                'test_r2': r2,
-                'cv_rmse': cv_rmse,
-                'cv_std': cv_std,
-                'overfitting_detected': overfitting_detected
-            }
-            
-            self.models['density'] = model
-            logger.info(f"密度率予測モデル訓練完了 - Test RMSE: {rmse:.4f}, R²: {r2:.4f}")
+            try:
+                model_params = self.best_params['density'].copy()
+                model_type = model_params.pop('model_type')
+                
+                # 基本モデル作成
+                base_model = self._create_model_with_params(model_type, self.best_params['density'])
+                
+                # アンサンブルモデルのコンポーネント作成（多様性のため異なるモデル）
+                rf_model = RandomForestRegressor(n_estimators=300, max_depth=10, random_state=42)
+                gb_model = GradientBoostingRegressor(n_estimators=200, max_depth=6, random_state=42)
+                ridge_model = Pipeline([('scaler', StandardScaler()), ('ridge', Ridge(alpha=1.0))])
+                
+                # アンサンブルモデル作成
+                ensemble_model = VotingRegressor([
+                    ('best', base_model),
+                    ('rf', rf_model),
+                    ('gb', gb_model),
+                    ('ridge', ridge_model)
+                ], weights=[2, 1, 1, 1])  # 最適モデルに重み付け
+                
+                # 訓練・テストデータ分割
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y_density, test_size=0.2, random_state=42, shuffle=True
+                )
+                
+                # モデル訓練
+                ensemble_model.fit(X_train, y_train)
+                y_pred = ensemble_model.predict(X_test)
+                
+                # 評価指標計算
+                mse = mean_squared_error(y_test, y_pred)
+                rmse = np.sqrt(mse)
+                mae = mean_absolute_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+                
+                # クロスバリデーション
+                kfold = KFold(n_splits=10, shuffle=True, random_state=42)
+                cv_scores = cross_val_score(ensemble_model, X_train, y_train, cv=kfold, scoring='neg_mean_squared_error')
+                cv_rmse = np.sqrt(-cv_scores.mean())
+                cv_std = np.sqrt(-cv_scores).std()
+                
+                # 過学習判定
+                overfitting_detected = (rmse - cv_rmse) > cv_std * 1.5
+                
+                if overfitting_detected:
+                    logger.warning(f"密度率予測モデルで過学習の可能性があります。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
+                else:
+                    logger.info(f"密度率予測モデルの汎化性能は良好です。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
+                
+                results['density'] = {
+                    'model_type': f'{model_type}_ensemble',
+                    'test_rmse': rmse,
+                    'test_mae': mae,
+                    'test_r2': r2,
+                    'cv_rmse': cv_rmse,
+                    'cv_std': cv_std,
+                    'overfitting_detected': overfitting_detected
+                }
+                
+                self.ensemble_models['density'] = ensemble_model
+                logger.info(f"密度率予測アンサンブルモデル訓練完了 - Test RMSE: {rmse:.4f}, R²: {r2:.4f}")
+                
+            except Exception as e:
+                logger.error(f"密度率予測モデルの訓練中にエラーが発生しました: {str(e)}")
+                results['density'] = {'error': str(e)}
         
         # 占有座席数予測モデル
         if 'seats' in self.best_params:
-            model_params = self.best_params['seats'].copy()
-            model_type = model_params.pop('model_type')
-            
-            # モデルインスタンス作成
-            if model_type == 'random_forest':
-                model = RandomForestRegressor(**model_params, random_state=42)
-            elif model_type == 'gradient_boosting':
-                model = GradientBoostingRegressor(**model_params, random_state=42)
-            elif model_type == 'ridge':
-                model = Ridge(**model_params)
-            elif model_type == 'elastic_net':
-                model = ElasticNet(**model_params, random_state=42)
-            
-            # 訓練・テストデータ分割（過学習対策でテストデータを増やす）
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y_seats, test_size=0.25, random_state=42
-            )
-            
-            # スケーリング（線形モデルの場合）
-            if model_type in ['ridge', 'elastic_net']:
-                if 'seats' not in self.scalers:
-                    scaler = StandardScaler()
-                    X_train_scaled = scaler.fit_transform(X_train)
-                    self.scalers['seats'] = scaler
-                else:
-                    scaler = self.scalers['seats']
-                    X_train_scaled = scaler.fit_transform(X_train)
+            try:
+                model_params = self.best_params['seats'].copy()
+                model_type = model_params.pop('model_type')
                 
-                X_test_scaled = scaler.transform(X_test)
-                model.fit(X_train_scaled, y_train)
-                y_pred = model.predict(X_test_scaled)
-            else:
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-            
-            # 評価指標計算
-            mse = mean_squared_error(y_test, y_pred)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, y_pred)
-            r2 = r2_score(y_test, y_pred)
-            
-            # クロスバリデーション（過学習対策で分割数を増やす）
-            kfold = KFold(n_splits=8, shuffle=True, random_state=42)
-            cv_scores = cross_val_score(model, X_train, y_train, cv=kfold, scoring='neg_mean_squared_error')
-            cv_rmse = np.sqrt(-cv_scores.mean())
-            cv_std = np.sqrt(-cv_scores).std()
-            
-            # 過学習判定
-            overfitting_detected = abs(rmse - cv_rmse) > cv_std * 2
-            
-            # 過学習警告
-            if overfitting_detected:
-                logger.warning(f"占有座席数予測モデルで過学習の可能性があります。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
-            else:
-                logger.info(f"占有座席数予測モデルの汎化性能は良好です。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
-            
-            results['seats'] = {
-                'model_type': model_type,
-                'test_rmse': rmse,
-                'test_mae': mae,
-                'test_r2': r2,
-                'cv_rmse': cv_rmse,
-                'cv_std': cv_std,
-                'overfitting_detected': overfitting_detected
-            }
-            
-            self.models['seats'] = model
-            logger.info(f"占有座席数予測モデル訓練完了 - Test RMSE: {rmse:.4f}, R²: {r2:.4f}")
+                # 基本モデル作成
+                base_model = self._create_model_with_params(model_type, self.best_params['seats'])
+                
+                # アンサンブルモデル作成
+                rf_model = RandomForestRegressor(n_estimators=300, max_depth=10, random_state=42)
+                gb_model = GradientBoostingRegressor(n_estimators=200, max_depth=6, random_state=42)
+                ridge_model = Pipeline([('scaler', StandardScaler()), ('ridge', Ridge(alpha=1.0))])
+                
+                ensemble_model = VotingRegressor([
+                    ('best', base_model),
+                    ('rf', rf_model),
+                    ('gb', gb_model),
+                    ('ridge', ridge_model)
+                ], weights=[2, 1, 1, 1])
+                
+                # 訓練・テストデータ分割
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y_seats, test_size=0.2, random_state=42, shuffle=True
+                )
+                
+                # モデル訓練
+                ensemble_model.fit(X_train, y_train)
+                y_pred = ensemble_model.predict(X_test)
+                
+                # 評価指標計算
+                mse = mean_squared_error(y_test, y_pred)
+                rmse = np.sqrt(mse)
+                mae = mean_absolute_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+                
+                # クロスバリデーション
+                kfold = KFold(n_splits=10, shuffle=True, random_state=42)
+                cv_scores = cross_val_score(ensemble_model, X_train, y_train, cv=kfold, scoring='neg_mean_squared_error')
+                cv_rmse = np.sqrt(-cv_scores.mean())
+                cv_std = np.sqrt(-cv_scores).std()
+                
+                # 過学習判定
+                overfitting_detected = (rmse - cv_rmse) > cv_std * 1.5
+                
+                if overfitting_detected:
+                    logger.warning(f"占有座席数予測モデルで過学習の可能性があります。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
+                else:
+                    logger.info(f"占有座席数予測モデルの汎化性能は良好です。Test RMSE: {rmse:.4f}, CV RMSE: {cv_rmse:.4f}")
+                
+                results['seats'] = {
+                    'model_type': f'{model_type}_ensemble',
+                    'test_rmse': rmse,
+                    'test_mae': mae,
+                    'test_r2': r2,
+                    'cv_rmse': cv_rmse,
+                    'cv_std': cv_std,
+                    'overfitting_detected': overfitting_detected
+                }
+                
+                self.ensemble_models['seats'] = ensemble_model
+                logger.info(f"占有座席数予測アンサンブルモデル訓練完了 - Test RMSE: {rmse:.4f}, R²: {r2:.4f}")
+                
+            except Exception as e:
+                logger.error(f"占有座席数予測モデルの訓練中にエラーが発生しました: {str(e)}")
+                results['seats'] = {'error': str(e)}
         
         self.model_performance = results
         return results
     
     def predict(self, day_of_week: int) -> Dict:
         """
-        曜日から密度率と占有座席数を予測
+        曜日から密度率と占有座席数を予測（アンサンブルモデル使用）
         
         Args:
             day_of_week: 曜日（0-4: 月-金）
@@ -361,78 +378,23 @@ class MLPredictor:
         Returns:
             Dict: 予測結果
         """
-        if not self.models:
-            raise ValueError("モデルが訓練されていません。先にtrain_best_models()を実行してください。")
+        # prediction.pyのPredictionServiceを使用して予測を行う
+        from utils.prediction import PredictionService
         
-        # 特徴量を手動で作成
-        try:
-            # 基本的な特徴量を作成
-            features = np.zeros((1, 10))  # 10個の特徴量
-            
-            # 1. day_of_week
-            features[0, 0] = day_of_week
-            
-            # 2. density_seats_ratio（平均値を使用）
-            features[0, 1] = 0.1  # デフォルト値
-            
-            # 3-7. 曜日ダミー変数
-            features[0, 2] = 1 if day_of_week == 0 else 0  # is_monday
-            features[0, 3] = 1 if day_of_week == 1 else 0  # is_tuesday
-            features[0, 4] = 1 if day_of_week == 2 else 0  # is_wednesday
-            features[0, 5] = 1 if day_of_week == 3 else 0  # is_thursday
-            features[0, 6] = 1 if day_of_week == 4 else 0  # is_friday
-            
-            # 8. is_early_week（月火）
-            features[0, 7] = 1 if day_of_week in [0, 1] else 0
-            
-            # 9. is_mid_week（水）
-            features[0, 8] = 1 if day_of_week == 2 else 0
-            
-            # 10. is_late_week（木金）
-            features[0, 9] = 1 if day_of_week in [3, 4] else 0
-            
-        except Exception as e:
-            logger.warning(f"特徴量作成でエラー: {e}")
-            # フォールバック: 曜日のみの特徴量を使用
-            features = np.array([[day_of_week]])
+        prediction_service = PredictionService()
+        result = prediction_service.predict_with_models(day_of_week)
         
-        predictions = {}
-        
-        # 密度率予測
-        if 'density' in self.models:
-            model = self.models['density']
-            try:
-                if 'density' in self.scalers:
-                    features_scaled = self.scalers['density'].transform(features)
-                    density_pred = model.predict(features_scaled)[0]
-                else:
-                    density_pred = model.predict(features)[0]
-                
-                predictions['density_rate'] = float(max(0, min(100, density_pred)))  # 0-100%の範囲に制限
-            except Exception as e:
-                logger.error(f"密度率予測エラー: {e}")
-                predictions['density_rate'] = 0.0
-        
-        # 占有座席数予測
-        if 'seats' in self.models:
-            model = self.models['seats']
-            try:
-                if 'seats' in self.scalers:
-                    features_scaled = self.scalers['seats'].transform(features)
-                    seats_pred = model.predict(features_scaled)[0]
-                else:
-                    seats_pred = model.predict(features)[0]
-                
-                predictions['occupied_seats'] = int(max(0, min(8, seats_pred)))  # 席数8に制限
-            except Exception as e:
-                logger.error(f"占有座席数予測エラー: {e}")
-                predictions['occupied_seats'] = 0
+        # PredictionServiceの戻り値形式をMLPredictorの戻り値形式に変換
+        predictions = {
+            'density_rate': result['occupancy_rate'] * 100,  # 0-1のスケールを0-100に変換
+            'occupied_seats': result['occupied_seats']
+        }
         
         return predictions
     
     def save_models(self, model_dir: str = 'utils/joblib') -> Dict[str, str]:
         """
-        訓練済みモデルを保存
+        訓練済みモデルと性能情報を保存
         
         Args:
             model_dir: 保存ディレクトリ
@@ -443,34 +405,24 @@ class MLPredictor:
         os.makedirs(model_dir, exist_ok=True)
         saved_files = {}
         
-        # モデル保存
-        for target, model in self.models.items():
+        # アンサンブルモデル保存（実際に使用されるもののみ）
+        for target, model in self.ensemble_models.items():
             model_path = os.path.join(model_dir, f'{target}_model.joblib')
             joblib.dump(model, model_path)
             saved_files[f'{target}_model'] = model_path
         
-        # スケーラー保存
-        for target, scaler in self.scalers.items():
-            scaler_path = os.path.join(model_dir, f'{target}_scaler.joblib')
-            joblib.dump(scaler, scaler_path)
-            saved_files[f'{target}_scaler'] = scaler_path
+        # モデル性能情報を保存
+        if self.model_performance:
+            performance_path = os.path.join(model_dir, 'model_performance.joblib')
+            joblib.dump(self.model_performance, performance_path)
+            saved_files['model_performance'] = performance_path
         
-        # パラメータ保存
-        params_path = os.path.join(model_dir, 'best_params.joblib')
-        joblib.dump(self.best_params, params_path)
-        saved_files['best_params'] = params_path
-        
-        # 性能評価結果保存
-        performance_path = os.path.join(model_dir, 'model_performance.joblib')
-        joblib.dump(self.model_performance, performance_path)
-        saved_files['model_performance'] = performance_path
-        
-        logger.info(f"モデルを保存しました: {saved_files}")
+        logger.info(f"アンサンブルモデルと性能情報を保存しました: {saved_files}")
         return saved_files
     
     def load_models(self, model_dir: str = 'utils/joblib') -> bool:
         """
-        保存済みモデルを読み込み
+        保存済みモデルと性能情報を読み込み
         
         Args:
             model_dir: モデルディレクトリ
@@ -479,27 +431,25 @@ class MLPredictor:
             bool: 読み込み成功可否
         """
         try:
-            # モデル読み込み
+            # アンサンブルモデル読み込み（実際に使用されるもののみ）
             for target in ['density', 'seats']:
                 model_path = os.path.join(model_dir, f'{target}_model.joblib')
                 if os.path.exists(model_path):
-                    self.models[target] = joblib.load(model_path)
-                
-                scaler_path = os.path.join(model_dir, f'{target}_scaler.joblib')
-                if os.path.exists(scaler_path):
-                    self.scalers[target] = joblib.load(scaler_path)
+                    self.ensemble_models[target] = joblib.load(model_path)
+                else:
+                    logger.warning(f"モデルファイルが見つかりません: {model_path}")
+                    return False
             
-            # パラメータ読み込み
-            params_path = os.path.join(model_dir, 'best_params.joblib')
-            if os.path.exists(params_path):
-                self.best_params = joblib.load(params_path)
-            
-            # 性能評価結果読み込み
+            # モデル性能情報を読み込み（存在する場合）
             performance_path = os.path.join(model_dir, 'model_performance.joblib')
             if os.path.exists(performance_path):
                 self.model_performance = joblib.load(performance_path)
+                logger.info("モデル性能情報を読み込みました")
+            else:
+                logger.warning("モデル性能情報ファイルが見つかりません")
+                self.model_performance = {}
             
-            logger.info("モデルの読み込みが完了しました")
+            logger.info("アンサンブルモデルと性能情報の読み込みが完了しました")
             return True
             
         except Exception as e:
@@ -513,92 +463,18 @@ class MLPredictor:
         Returns:
             Dict: モデル情報
         """
-        # 基本情報
-        info = {
-            'available_models': list(self.models.keys()),
+        return {
+            'available_models': list(self.ensemble_models.keys()),
             'best_parameters': self.best_params,
             'model_performance': self.model_performance,
-            'feature_names': self.data_processor.get_feature_columns() if hasattr(self, 'data_processor') else ['day_of_week']
-        }
-        
-        # モデルの詳細情報を追加
-        if self.models:
-            model_details = {}
-            for target, model in self.models.items():
-                model_type = type(model).__name__
-                model_details[target] = {
-                    'model_type': model_type,
-                    'parameters': {},
-                    'feature_importance': None,
-                    'confidence_interval': {}
-                }
-                
-                # パラメータ取得（シリアライズ可能なプリミティブ型のみ）
-                try:
-                    safe_params = {}
-                    for key, value in model.__dict__.items():
-                        if key.startswith('_') or callable(value):
-                            continue
-                        # シリアライズ可能な型のみ抽出
-                        if isinstance(value, (int, float, str, bool, list, tuple, dict)) or value is None:
-                            safe_params[key] = value
-                        elif hasattr(value, '__len__'):
-                            try:
-                                safe_params[key] = len(value)  # 長さのみを記録
-                            except:
-                                pass
-                        else:
-                            safe_params[key] = str(type(value).__name__)  # 型名のみを記録
-                    
-                    model_details[target]['parameters'] = safe_params
-                except:
-                    pass
-                
-                # 特徴量重要度（ツリーモデルの場合）
-                try:
-                    if hasattr(model, 'feature_importances_'):
-                        feature_names = self.data_processor.get_feature_columns()
-                        importances = model.feature_importances_
-                        # DataFrameにせず、辞書形式で出力
-                        importance_dict = {feature_names[i]: float(importance) 
-                                          for i, importance in enumerate(importances)
-                                          if i < len(feature_names)}
-                        model_details[target]['feature_importance'] = importance_dict
-                except Exception:
-                    pass
-            
-            info['model_details'] = model_details
-            
-            # 予測パフォーマンスのサマリー
-            performance_summary = {}
-            for target, perf in self.model_performance.items():
-                metrics = {}
-                for metric, value in perf.items():
-                    try:
-                        if isinstance(value, (int, float)):
-                            metrics[metric] = float(value)
-                    except:
-                        pass
-                performance_summary[target] = metrics
-            info['performance_summary'] = performance_summary
-            
-        # 実用的な情報を追加
-        info['usage_info'] = {
-            'prediction_range': {
-                'density_rate': {'min': 0.0, 'max': 100.0, 'unit': '%'},
-                'occupied_seats': {'min': 0, 'max': 8, 'unit': '席'}
-            },
-            'feature_description': {
-                'day_of_week': '曜日（0-4: 月-金）',
-                'is_monday': '月曜日フラグ',
-                'is_tuesday': '火曜日フラグ',
-                'is_wednesday': '水曜日フラグ',
-                'is_thursday': '木曜日フラグ',
-                'is_friday': '金曜日フラグ',
-                'is_early_week': '週前半フラグ（月火）',
-                'is_mid_week': '週中フラグ（水）',
-                'is_late_week': '週後半フラグ（木金）'
+            'model_type': 'ensemble_learning',
+            'feature_names': self.data_processor.get_feature_columns() if hasattr(self.data_processor, 'get_feature_columns') else ['day_of_week'],
+            'usage_info': {
+                'prediction_range': {
+                    'density_rate': {'min': 0.0, 'max': 100.0, 'unit': '%'},
+                    'occupied_seats': {'min': 0, 'max': 8, 'unit': '席'}
+                },
+                'ensemble_components': ['best_model', 'random_forest', 'gradient_boosting', 'ridge_regression'],
+                'optimization_method': 'TPE_sampling_with_pruning'
             }
         }
-        
-        return info

@@ -1,5 +1,25 @@
 {
-  "last_update": "2025-06-17T16:51:46.166524",
-  "today_tomorrow_file": "/Users/snakashima/develop/real-time-seating-app-ML/api/today_tomorrow_predictions.json",
-  "weekly_averages_file": "/Users/snakashima/develop/real-time-seating-app-ML/api/weekly_averages_predictions.json"
+  "last_update": "2025-06-18T22:29:34.871036",
+  "available_files": {
+    "weekly_predictions": {
+      "file": "weekly_predictions.json",
+      "description": "今日から7日間の予測（土日含む）",
+      "data_type": "predictions",
+      "model_type": "ensemble_learning"
+    },
+    "weekly_averages": {
+      "file": "weekly_averages.json",
+      "description": "平日の曜日別データベース統計平均値（実データのみ）",
+      "data_type": "database_statistics",
+      "model_type": "statistical_average"
+    }
+  },
+  "prediction_info": {
+    "has_trained_models": true,
+    "prediction_method": "ensemble_model",
+    "model_accuracy": {
+      "density_r2": "0.948",
+      "seats_r2": "0.663"
+    }
+  }
 }
