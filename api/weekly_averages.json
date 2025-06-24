@@ -1,35 +1,35 @@
 {
   "weekly_averages": [
     {
-      "weekday": 0,
+      "weekday": 1,
       "weekday_name": "月曜日",
       "is_weekend": false,
       "occupancy_rate": 0.29,
       "occupied_seats": 2
     },
     {
-      "weekday": 1,
+      "weekday": 2,
       "weekday_name": "火曜日",
       "is_weekend": false,
       "occupancy_rate": 0.32,
       "occupied_seats": 3
     },
     {
-      "weekday": 2,
+      "weekday": 3,
       "weekday_name": "水曜日",
       "is_weekend": false,
       "occupancy_rate": 0.42,
       "occupied_seats": 4
     },
     {
-      "weekday": 3,
+      "weekday": 4,
       "weekday_name": "木曜日",
       "is_weekend": false,
       "occupancy_rate": 0.3,
       "occupied_seats": 3
     },
     {
-      "weekday": 4,
+      "weekday": 5,
       "weekday_name": "金曜日",
       "is_weekend": false,
       "occupancy_rate": 0.37,

@@ -193,23 +193,26 @@ class PredictionService:
             
             # 7日分の予測を収集
             for i in range(7):
-                weekday = current_date.weekday()
+                python_weekday = current_date.weekday()  # Python形式（月曜日=0）
+                
+                # JavaScript形式に変換（日曜日=0）
+                js_weekday = (python_weekday + 1) % 7
                 
                 # 平日は予測モデル、土日はSupabaseの実データがあれば使用
-                if weekday < 5:  # 月曜日から金曜日
-                    prediction = self.predict_with_models(weekday)
+                if python_weekday < 5:  # 月曜日から金曜日（Python基準）
+                    prediction = self.predict_with_models(python_weekday)
                 else:  # 土曜日・日曜日
                     try:
                         # 土日もSupabaseに実データがあるかチェック
-                        prediction = self.get_database_average(weekday)
+                        prediction = self.get_database_average(python_weekday)
                     except Exception:
                         # 土日のデータがない場合は0として処理（業務仕様）
                         prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
                 
                 predictions.append({
-                    "weekday": weekday,
-                    "weekday_name": weekday_names[weekday],
-                    "is_weekend": weekday >= 5,
+                    "weekday": js_weekday,  # JavaScript形式（日曜日=0）
+                    "weekday_name": weekday_names[python_weekday],
+                    "is_weekend": python_weekday >= 5,
                     **prediction
                 })
                 
@@ -253,20 +256,23 @@ class PredictionService:
             weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
             weekly_averages = []
             
-            for day_of_week in range(5):  # 平日のみ
+            for python_weekday in range(5):  # 平日のみ（Python形式: 0=月曜日）
                 try:
                     # 週間平均は常にデータベースの統計平均値を使用
-                    prediction = self.get_database_average(day_of_week)
+                    prediction = self.get_database_average(python_weekday)
+                    
+                    # JavaScript形式に変換（日曜日=0）
+                    js_weekday = (python_weekday + 1) % 7
                     
                     weekly_averages.append({
-                        "weekday": day_of_week,
-                        "weekday_name": weekday_names[day_of_week],
+                        "weekday": js_weekday,  # JavaScript形式（日曜日=0）
+                        "weekday_name": weekday_names[python_weekday],
                         "is_weekend": False,  # 平日のみなので常にFalse
                         **prediction
                     })
                 except Exception as e:
                     # 個別の曜日でエラーが発生した場合はエラーを再発生
-                    raise Exception(f"曜日{day_of_week}({weekday_names[day_of_week]})の統計平均値計算でエラー: {str(e)}")
+                    raise Exception(f"曜日{python_weekday}({weekday_names[python_weekday]})の統計平均値計算でエラー: {str(e)}")
             
             return {"weekly_averages": weekly_averages}
             
