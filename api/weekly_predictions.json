@@ -1,58 +1,51 @@
-{
-  "day0": {
-    "date": "2025-06-18",
+[
+  {
+    "weekday": 1,
+    "weekday_name": "火曜日",
+    "is_weekend": false,
+    "occupancy_rate": 0.26,
+    "occupied_seats": 2
+  },
+  {
     "weekday": 2,
     "weekday_name": "水曜日",
     "is_weekend": false,
     "occupancy_rate": 0.39,
     "occupied_seats": 3
   },
-  "day1": {
-    "date": "2025-06-19",
+  {
     "weekday": 3,
     "weekday_name": "木曜日",
     "is_weekend": false,
     "occupancy_rate": 0.26,
     "occupied_seats": 2
   },
-  "day2": {
-    "date": "2025-06-20",
+  {
     "weekday": 4,
     "weekday_name": "金曜日",
     "is_weekend": false,
     "occupancy_rate": 0.38,
     "occupied_seats": 3
   },
-  "day3": {
-    "date": "2025-06-21",
+  {
     "weekday": 5,
     "weekday_name": "土曜日",
     "is_weekend": true,
-    "occupancy_rate": 0.0,
-    "occupied_seats": 0
+    "occupancy_rate": 0.5,
+    "occupied_seats": 4
   },
-  "day4": {
-    "date": "2025-06-22",
+  {
     "weekday": 6,
     "weekday_name": "日曜日",
     "is_weekend": true,
     "occupancy_rate": 0.0,
     "occupied_seats": 0
   },
-  "day5": {
-    "date": "2025-06-23",
+  {
     "weekday": 0,
     "weekday_name": "月曜日",
-    "is_weekend": false,
-    "occupancy_rate": 0.38,
-    "occupied_seats": 3
-  },
-  "day6": {
-    "date": "2025-06-24",
-    "weekday": 1,
-    "weekday_name": "火曜日",
     "is_weekend": false,
     "occupancy_rate": 0.26,
     "occupied_seats": 2
   }
-}
+]

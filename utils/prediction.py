@@ -28,17 +28,16 @@ except ImportError:
     DEPENDENCIES_AVAILABLE = False
 
 class PredictionService:
-    """統一予測サービス（アンサンブルモデル対応）"""
+    """統一予測"""
     
     def __init__(self):
         self.ensemble_models = self._load_ensemble_models()
         
         # JSONファイルの保存先
-        self.today_tomorrow_file = os.path.join(project_root, 'api/today_tomorrow_predictions.json')
         self.weekly_averages_file = os.path.join(project_root, 'api/weekly_averages_predictions.json')
     
     def _load_ensemble_models(self):
-        """アンサンブルモデルを読み込む（必要なもののみ）"""
+        """アンサンブルモデルを読み込む"""
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))            
             model_files = {
@@ -208,7 +207,6 @@ class PredictionService:
                         prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
                 
                 predictions.append({
-                    "date": current_date.strftime('%Y-%m-%d'),
                     "weekday": weekday,
                     "weekday_name": weekday_names[weekday],
                     "is_weekend": weekday >= 5,
@@ -217,19 +215,13 @@ class PredictionService:
                 
                 current_date += timedelta(days=1)
             
-            # 結果をday0からday6の形式で返す
-            result = {}
-            for i, prediction in enumerate(predictions):
-                day_key = f"day{i}"
-                result[day_key] = prediction
-            
-            return result
+            return predictions
             
         except Exception as e:
             raise e
 
     def predict_5days(self):
-        """今日から5日分の予測（平日のみ、土日はスキップ）- 後方互換性のため保持"""
+        """今日から5日分の予測（平日のみ、土日はスキップ）"""
         try:
             # 1週間分の予測から平日のみを抽出
             weekly_result = self.predict_weekly()
@@ -238,45 +230,17 @@ class PredictionService:
             day_count = 0
             
             for i in range(7):
-                day_key = f"day{i}"
-                if day_key in weekly_result and not weekly_result[day_key]["is_weekend"]:
+                if i < len(weekly_result) and not weekly_result[i]["is_weekend"]:
                     if day_count == 0:
-                        result["today"] = weekly_result[day_key]
+                        result["today"] = weekly_result[i]
                     elif day_count == 1:
-                        result["tomorrow"] = weekly_result[day_key]
+                        result["tomorrow"] = weekly_result[i]
                     else:
-                        result[f"day{day_count}"] = weekly_result[day_key]
+                        result[f"day{day_count}"] = weekly_result[i]
                     
                     day_count += 1
                     if day_count >= 5:
                         break
-            
-            return result
-            
-        except Exception as e:
-            raise e
-
-    def predict_today_tomorrow(self):
-        """今日・明日の予測（後方互換性のため保持）"""
-        try:
-            # 1週間分の予測から今日・明日を抽出
-            weekly_result = self.predict_weekly()
-            
-            # 今日（day0）
-            today_data = weekly_result.get("day0", {})
-            
-            # 明日を探す（平日の場合は次の日、金曜日の場合は次の月曜日）
-            tomorrow_data = {}
-            for i in range(1, 7):
-                day_key = f"day{i}"
-                if day_key in weekly_result and not weekly_result[day_key]["is_weekend"]:
-                    tomorrow_data = weekly_result[day_key]
-                    break
-            
-            result = {
-                "today": today_data,
-                "tomorrow": tomorrow_data
-            }
             
             return result
             
@@ -297,6 +261,7 @@ class PredictionService:
                     weekly_averages.append({
                         "weekday": day_of_week,
                         "weekday_name": weekday_names[day_of_week],
+                        "is_weekend": False,  # 平日のみなので常にFalse
                         **prediction
                     })
                 except Exception as e:
