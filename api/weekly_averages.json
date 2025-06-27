@@ -25,14 +25,14 @@
       "weekday": 4,
       "weekday_name": "木曜日",
       "is_weekend": false,
-      "occupancy_rate": 0.3,
+      "occupancy_rate": 0.34,
       "occupied_seats": 3
     },
     {
       "weekday": 5,
       "weekday_name": "金曜日",
       "is_weekend": false,
-      "occupancy_rate": 0.37,
+      "occupancy_rate": 0.43,
       "occupied_seats": 3
     }
   ]

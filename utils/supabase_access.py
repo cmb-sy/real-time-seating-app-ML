@@ -24,37 +24,12 @@ def get_supabase_config():
         print(f"Supabase設定取得エラー: {str(e)}")
         return None, None
 
-def get_mock_data(day_of_week=None):
-    """テスト用のモックデータを生成"""
-    import random
-    
-    if day_of_week is None:
-        day_of_week = random.randint(0, 4)
-    
-    # 曜日に基づいたモックデータを生成
-    mock_data = []
-    record_count = random.randint(5, 15)
-    
-    for _ in range(record_count):
-        base_density = 30 + day_of_week * 10 + random.randint(-10, 10)
-        base_seats = 3 + random.randint(0, 3)
-        
-        mock_data.append({
-            'density_rate': max(0, min(100, base_density)),
-            'occupied_seats': max(0, min(8, base_seats)),
-            'day_of_week': day_of_week
-        })
-    
-    print(f"Generated {len(mock_data)} mock records for day_of_week={day_of_week}")
-    return mock_data
-
 def get_supabase_data(query_params=None):
-    """Supabaseから実データを取得"""
-    supabase_url, supabase_key = get_supabase_config()  # 変数名を統一
+    """Supabaseから実データを取得（平日のみ対応）"""
+    supabase_url, supabase_key = get_supabase_config()
     
     if not supabase_url or not supabase_key:
-        print("Supabaseの設定が見つからないため、モックデータを使用します")
-        return get_mock_data()
+        raise Exception("Supabaseの設定が見つかりません。環境変数NEXT_PUBLIC_SUPABASE_URL、SUPABASE_SERVICE_ROLE_KEY、またはNEXT_PUBLIC_SUPABASE_ANON_KEYを確認してください。")
     
     try:
         headers = {
@@ -70,20 +45,50 @@ def get_supabase_data(query_params=None):
         with urllib.request.urlopen(req) as response:
             raw_response = response.read().decode()
             data = json.loads(raw_response)
+        
+        # 平日データのみを許可（0-4: 月-金）
+        if query_params and "day_of_week=eq." in query_params:
+            day_of_week = int(query_params.split("day_of_week=eq.")[1].split("&")[0])
+            if day_of_week >= 5:
+                raise ValueError(f"土日（曜日{day_of_week}）のデータ取得は許可されていません。業務は平日のみです。")
+        
         return data
         
     except urllib.error.HTTPError as e:
-        print(f"HTTP Error: {e.code}")
-        print(f"Error response: {e.read().decode()}")
-        return get_mock_data()
+        error_message = f"Supabaseからのデータ取得に失敗しました: HTTP {e.code}"
+        print(error_message)
+        try:
+            error_response = e.read().decode()
+            print(f"Error response: {error_response}")
+        except:
+            pass
+        raise Exception(error_message)
     except Exception as e:
-        raise e
+        error_message = f"Supabaseからのデータ取得エラー: {str(e)}"
+        print(error_message)
+        raise Exception(error_message)
 
 if __name__ == "__main__":
-    # 全データ取得
-    all_data = get_supabase_data()
-    print(f"取得したデータ数: {len(all_data)}")
-    
-    # 特定の曜日のデータ取得
-    day1_data = get_supabase_data("day_of_week=eq.1&select=density_rate,occupied_seats")
-    print(f"月曜日のデータ数: {len(day1_data)}")
+    try:
+        # 全データ取得テスト
+        print("=== 全データ取得テスト ===")
+        all_data = get_supabase_data()
+        print(f"取得したデータ数: {len(all_data)}")
+        
+        # 平日データ取得テスト
+        print("\n=== 平日データ取得テスト ===")
+        for day in range(5):  # 月-金のみ
+            day_data = get_supabase_data(f"day_of_week=eq.{day}&select=density_rate,occupied_seats")
+            weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
+            print(f"{weekday_names[day]}のデータ数: {len(day_data)}")
+        
+        # 土日データ取得テスト（エラーが発生するはず）
+        print("\n=== 土日データ取得テスト（エラー確認） ===")
+        try:
+            weekend_data = get_supabase_data("day_of_week=eq.5&select=density_rate,occupied_seats")
+            print("⚠️ 警告: 土曜日のデータが取得されました（本来はエラーになるべき）")
+        except Exception as e:
+            print(f"✅ 期待通りエラー: {str(e)}")
+            
+    except Exception as e:
+        print(f"テスト実行エラー: {str(e)}")

@@ -36,7 +36,7 @@ class MLDataProcessor:
 
     def load_data_from_supabase(self) -> pd.DataFrame:
         """
-        Supabaseからデータを取得してDataFrameに変換
+        Supabaseからデータを取得してDataFrameに変換（平日のみ対応）
         
         Returns:
             pd.DataFrame: 取得したデータ
@@ -51,8 +51,19 @@ class MLDataProcessor:
             self.df['occupied_seats'] = pd.to_numeric(self.df['occupied_seats'])
             self.df['day_of_week'] = pd.to_numeric(self.df['day_of_week'])
         
+            # 土日データの存在チェック
+            weekend_data = self.df[self.df['day_of_week'].isin([5, 6])]
+            if len(weekend_data) > 0:
+                print(f"⚠️ 警告: 土日のデータが{len(weekend_data)}件検出されました。これらのデータは機械学習処理から除外されます。")
+                print("   業務は平日のみのため、土日データは使用されません。")
+            
             # 平日データのみを抽出（0-4: 月-金）
             self.df_weekdays = self.df[self.df['day_of_week'].isin([0, 1, 2, 3, 4])].copy()
+            
+            if len(self.df_weekdays) == 0:
+                raise ValueError("平日のデータが存在しません。Supabaseに平日（月-金）のデータが登録されているか確認してください。")
+            
+            print(f"✅ 平日データ{len(self.df_weekdays)}件を読み込みました（全{len(self.df)}件中）")
             
             return self.df
             

@@ -370,14 +370,18 @@ class MLPredictor:
     
     def predict(self, day_of_week: int) -> Dict:
         """
-        曜日から密度率と占有座席数を予測（アンサンブルモデル使用）
+        曜日から密度率と占有座席数を予測（アンサンブルモデル使用、平日のみ対応）
         
         Args:
-            day_of_week: 曜日（0-4: 月-金）
+            day_of_week: 曜日（0-4: 月-金のみ）
             
         Returns:
             Dict: 予測結果
         """
+        # 土日の予測は拒否
+        if day_of_week >= 5:
+            raise ValueError(f"土日（曜日{day_of_week}）の予測はできません。業務は平日（0-4: 月-金）のみです。")
+        
         # prediction.pyのPredictionServiceを使用して予測を行う
         from utils.prediction import PredictionService
         

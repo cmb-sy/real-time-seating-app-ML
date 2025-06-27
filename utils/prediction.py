@@ -63,6 +63,10 @@ class PredictionService:
     def create_features(self, day_of_week):
         """特徴量を作成（Supabaseデータから平均値を使用）"""
         try:
+            # 土日の特徴量作成は不可
+            if day_of_week >= 5:  # 土曜日（5）、日曜日（6）
+                raise ValueError(f"土日（曜日{day_of_week}）の特徴量作成はできません。業務は平日のみです。")
+            
             # Supabaseから該当曜日の実データを取得して平均値を計算
             data = get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
@@ -154,6 +158,10 @@ class PredictionService:
     def get_database_average(self, day_of_week):
         """データベースから平均値を計算"""
         try:
+            # 土日のデータは存在しないため、明確にエラーを発生
+            if day_of_week >= 5:  # 土曜日（5）、日曜日（6）
+                raise ValueError(f"土日（曜日{day_of_week}）のデータはSupabaseに存在しません。業務は平日のみです。")
+            
             data = get_supabase_data(f"day_of_week=eq.{day_of_week}&select=density_rate,occupied_seats")
             
             if not data:
@@ -198,16 +206,12 @@ class PredictionService:
                 # JavaScript形式に変換（日曜日=0）
                 js_weekday = (python_weekday + 1) % 7
                 
-                # 平日は予測モデル、土日はSupabaseの実データがあれば使用
+                # 平日は予測モデル、土日は常に0
                 if python_weekday < 5:  # 月曜日から金曜日（Python基準）
                     prediction = self.predict_with_models(python_weekday)
                 else:  # 土曜日・日曜日
-                    try:
-                        # 土日もSupabaseに実データがあるかチェック
-                        prediction = self.get_database_average(python_weekday)
-                    except Exception:
-                        # 土日のデータがない場合は0として処理（業務仕様）
-                        prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
+                    # 土日は業務休業のため常に0
+                    prediction = {"occupancy_rate": 0.0, "occupied_seats": 0}
                 
                 predictions.append({
                     "weekday": js_weekday,  # JavaScript形式（日曜日=0）
