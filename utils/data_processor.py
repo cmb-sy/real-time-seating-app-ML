@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-"""
-- 特徴量エンジニアリング
-"""
 import os
 import sys
 import pandas as pd
@@ -13,17 +10,10 @@ from typing import Dict, List, Tuple
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)  # 同じ階層を最優先に
 
-# utilsディレクトリもパスに追加
-utils_dir = os.path.join(current_dir, "utils")
-if os.path.exists(utils_dir):
-    sys.path.insert(0, utils_dir)
-
 from supabase_access import get_supabase_data
 
 
 class MLDataProcessor:
-    """機械学習用データ処理クラス"""
-
     def __init__(self):
         self.df = None
         self.df_weekdays = None
@@ -60,7 +50,7 @@ class MLDataProcessor:
             ].copy()
 
             print(
-                f"✅ 平日データ{len(self.df_weekdays)}件を読み込みました（全{len(self.df)}件中）"
+                f"平日データ{len(self.df_weekdays)}件を読み込みました（全{len(self.df)}件中）"
             )
             return self.df_weekdays
 

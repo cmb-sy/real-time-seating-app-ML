@@ -1,26 +1,83 @@
 #!/usr/bin/env python3
-
 import sys
 import os
 import json
-from datetime import datetime, timedelta
 import numpy as np
+import joblib
+from datetime import datetime, timedelta
+from typing import Dict
 
-# パス設定
 current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
 project_root = os.path.dirname(current_dir)
-utils_dir = current_dir
 
-for path in [utils_dir, current_dir, project_root]:
-    if path not in sys.path:
-        sys.path.insert(0, path)
+from data_processor import MLDataProcessor
 
-from models import MLPredictor
+
+class MLPredictor:
+    def __init__(self, model_dir: str = "utils/joblib"):
+        self.models = {}
+        self.model_dir = model_dir
+        self.data_processor = MLDataProcessor()
+        self.feature_stats = None
+        self.load_models()
+
+    def predict(self, day_of_week: int) -> Dict:
+        if not 1 <= day_of_week <= 5:
+            raise ValueError(f"無効な曜日: {day_of_week}")
+
+        if not self.models or not self.feature_stats:
+            raise ValueError("モデルまたは特徴量統計が読み込まれていません")
+
+        features = self._create_features(day_of_week)
+        X = np.array([features])
+
+        predictions = {
+            "day_of_week": day_of_week,
+            "day_name": ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"][
+                day_of_week - 1
+            ],
+        }
+
+        if "density" in self.models:
+            density_pred = self.models["density"].predict(X)[0]
+            predictions["density_rate"] = round(max(0.0, min(100.0, density_pred)), 2)
+
+        if "seats" in self.models:
+            seats_pred = self.models["seats"].predict(X)[0]
+            predictions["occupied_seats"] = max(0, min(8, int(round(seats_pred))))
+
+        return predictions
+
+    def _create_features(self, day_of_week: int) -> list:
+        features = [
+            day_of_week,
+            self.feature_stats["density_seats_ratio_mean"],
+            1 if day_of_week == 1 else 0,
+            1 if day_of_week == 2 else 0,
+            1 if day_of_week == 3 else 0,
+            1 if day_of_week == 4 else 0,
+            1 if day_of_week == 5 else 0,
+            1 if day_of_week in [1, 2] else 0,
+            1 if day_of_week == 3 else 0,
+            1 if day_of_week in [4, 5] else 0,
+        ]
+        return features
+
+    def load_models(self) -> bool:
+        try:
+            for target in ["density", "seats"]:
+                model_path = os.path.join(self.model_dir, f"{target}_model.joblib")
+                if os.path.exists(model_path):
+                    self.models[target] = joblib.load(model_path)
+                else:
+                    return False
+            return True
+        except Exception:
+            return False
 
 
 class PredictionService:
-    """予測専用サービス（純粋ML版）"""
-
     def __init__(self):
         self.weekday_names = [
             "日曜日",
@@ -31,60 +88,33 @@ class PredictionService:
             "金曜日",
             "土曜日",
         ]
-        self.predictor = None
-        self._load_predictor()
+        self.predictor = MLPredictor()
+        self.data_processor = MLDataProcessor()
 
-    def _load_predictor(self):
-        """予測モデルを読み込み"""
-        try:
-            self.predictor = MLPredictor()
-            print("✅ 予測モデルを読み込みました")
-        except Exception as e:
-            raise RuntimeError(f"モデル読み込みエラー: {e}")
-
-    def predict_single_day(self, day_of_week):
-        """
-        Args:
-            day_of_week: 曜日（1-5: 月-金、0,6: 土日は0を返す）
-
-        Returns:
-            dict: 予測結果
-        """
-        # 土日は0を返す（ビジネスロジック）
+    def predict_single_day(self, day_of_week: int) -> Dict:
         if day_of_week == 0 or day_of_week == 6:
-            return {
-                "density_rate": 0.0,
-                "occupied_seats": 0,
-                "prediction_type": "weekend_zero",
-            }
+            return {"density_rate": 0.0, "occupied_seats": 0}
 
-        # 平日のみ機械学習予測
         if 1 <= day_of_week <= 5:
-            if not self.predictor:
-                raise RuntimeError("予測モデルが初期化されていません")
-
             try:
                 result = self.predictor.predict(day_of_week)
                 return {
                     "density_rate": round(float(result["density_rate"]), 2),
                     "occupied_seats": int(result["occupied_seats"]),
-                    "prediction_type": "ml_model",
                 }
             except Exception as e:
-                raise RuntimeError(f"予測エラー (曜日{day_of_week}): {e}")
+                raise RuntimeError(f"予測エラー: {e}")
 
-        raise ValueError(f"無効な曜日です: {day_of_week}")
+        raise ValueError(f"無効な曜日: {day_of_week}")
 
-    def predict_weekly(self):
-        """7日分のモデル予測データ生成"""
+    def predict_weekly(self) -> Dict:
         now = datetime.now()
-        current_date = now.date()
         predictions = []
 
         for i in range(7):
-            target_date = current_date + timedelta(days=i)
-            day_of_week = target_date.weekday()  # 0=月曜日, 6=日曜日
-            user_weekday = (day_of_week + 1) % 7  # 0=日曜日, 1=月曜日, ..., 6=土曜日
+            target_date = now.date() + timedelta(days=i)
+            day_of_week = target_date.weekday()
+            user_weekday = (day_of_week + 1) % 7
 
             prediction = self.predict_single_day(user_weekday)
             predictions.append(
@@ -94,138 +124,89 @@ class PredictionService:
                     "weekday_name": self.weekday_names[user_weekday],
                     "density_rate": prediction["density_rate"],
                     "occupied_seats": prediction["occupied_seats"],
-                    "prediction_type": prediction["prediction_type"],
                 }
             )
 
         return {"weekly_predictions": predictions}
 
-    def predict_weekly_averages(self):
-        """曜日ごとの実データ平均値計算"""
-        from supabase_access import get_supabase_data
+    def predict_weekly_averages(self) -> Dict:
+        """実データから曜日ごとの平均値を計算"""
+        try:
+            # MLDataProcessorを使用して実データを取得
+            ml_data, _, _, _ = self.data_processor.prepare_ml_data()
 
-        weekly_averages = []
+            if len(ml_data) == 0:
+                raise RuntimeError("実データが取得できません")
 
-        # 曜日ごとの実データ平均値を計算
-        weekday_averages = {}
+            weekly_averages = []
 
-        for day in range(1, 6):  # 平日のみ（DB形式: 1-5）
-            # 曜日ごとのデータを取得
-            day_data = get_supabase_data(
-                f"day_of_week=eq.{day}&select=density_rate,occupied_seats"
-            )
+            # 曜日ごとの平均値を計算
+            for user_weekday in range(7):
+                if user_weekday == 0 or user_weekday == 6:  # 土日
+                    weekly_averages.append(
+                        {
+                            "weekday": user_weekday,
+                            "weekday_name": self.weekday_names[user_weekday],
+                            "density_rate": 0.0,
+                            "occupied_seats": 0,
+                        }
+                    )
+                else:  # 平日
+                    # DB形式の曜日（1-5）に変換
+                    db_weekday = user_weekday
+                    day_data = ml_data[ml_data["day_of_week"] == db_weekday]
 
-            if not day_data or len(day_data) == 0:
-                raise RuntimeError(f"曜日{day}のデータが取得できませんでした")
+                    if len(day_data) > 0:
+                        avg_density = round(day_data["density_rate"].mean(), 2)
+                        avg_seats = round(day_data["occupied_seats"].mean())
+                        data_count = len(day_data)
+                    else:
+                        avg_density = 0.0
+                        avg_seats = 0
+                        data_count = 0
 
-            # 実データの平均値を計算
-            density_rates = [
-                float(record["density_rate"])
-                for record in day_data
-                if record.get("density_rate") is not None
-            ]
-            occupied_seats = [
-                int(record["occupied_seats"])
-                for record in day_data
-                if record.get("occupied_seats") is not None
-            ]
+                    weekly_averages.append(
+                        {
+                            "weekday": user_weekday,
+                            "weekday_name": self.weekday_names[user_weekday],
+                            "density_rate": avg_density,
+                            "occupied_seats": avg_seats,
+                            "data_type": "real_data_average",
+                            "data_count": data_count,
+                        }
+                    )
 
-            if not density_rates or not occupied_seats:
-                raise RuntimeError(f"曜日{day}に有効なデータがありません")
+            return {"weekly_averages": weekly_averages}
 
-            avg_density = round(np.mean(density_rates), 2)
-            avg_seats = round(np.mean(occupied_seats))
+        except Exception as e:
+            raise RuntimeError(f"週間平均計算エラー: {e}")
 
-            weekday_averages[day] = {
-                "density_rate": avg_density,
-                "occupied_seats": avg_seats,
-                "data_count": len(day_data),
-            }
-            print(
-                f"✅ 曜日{day}の実データ平均値を計算しました（データ数: {len(day_data)}）"
-            )
-
-        # 曜日ごとの平均値を設定
-        for user_weekday in range(7):
-            if user_weekday == 0 or user_weekday == 6:  # 土日
-                weekly_averages.append(
-                    {
-                        "weekday": user_weekday,
-                        "weekday_name": self.weekday_names[user_weekday],
-                        "density_rate": 0.0,
-                        "occupied_seats": 0,
-                        "data_type": "weekend_zero",
-                        "data_count": 0,
-                    }
-                )
-            else:  # 平日
-                weekly_averages.append(
-                    {
-                        "weekday": user_weekday,
-                        "weekday_name": self.weekday_names[user_weekday],
-                        "density_rate": weekday_averages[user_weekday]["density_rate"],
-                        "occupied_seats": weekday_averages[user_weekday][
-                            "occupied_seats"
-                        ],
-                        "data_type": "real_data_average",
-                        "data_count": weekday_averages[user_weekday]["data_count"],
-                    }
-                )
-
-        return {"weekly_averages": weekly_averages}
-
-    def save_predictions_to_json(self):
-        """予測結果をJSONファイルに保存"""
-        # 1. 週間予測データ保存
+    def save_predictions_to_json(self) -> Dict:
         weekly_predictions = self.predict_weekly()
         weekly_predictions_file = os.path.join(
             project_root, "api/weekly_predictions.json"
         )
 
         with open(weekly_predictions_file, "w", encoding="utf-8") as f:
-            json.dump(
-                weekly_predictions,
-                f,
-                ensure_ascii=False,
-                indent=2,
-                default=numpy_to_python,
-            )
+            json.dump(weekly_predictions, f, ensure_ascii=False, indent=2)
 
-        # 2. 週間平均データ保存
         weekly_averages = self.predict_weekly_averages()
         weekly_averages_file = os.path.join(project_root, "api/weekly_averages.json")
 
         with open(weekly_averages_file, "w", encoding="utf-8") as f:
-            json.dump(
-                weekly_averages,
-                f,
-                ensure_ascii=False,
-                indent=2,
-                default=numpy_to_python,
-            )
+            json.dump(weekly_averages, f, ensure_ascii=False, indent=2)
 
-        # 3. 更新情報保存
         timestamp_data = {
             "last_update": datetime.now().isoformat(),
-            "model_status": "ml_model_only",
             "files": {
                 "weekly_predictions": "weekly_predictions.json",
                 "weekly_averages": "weekly_averages.json",
             },
-            "weekday_format": "sunday_0_to_saturday_6",
-            "business_days": [1, 2, 3, 4, 5],
-            "fallback_disabled": True,
         }
 
         timestamp_file = os.path.join(project_root, "api/last_update.json")
         with open(timestamp_file, "w", encoding="utf-8") as f:
-            json.dump(
-                timestamp_data,
-                f,
-                ensure_ascii=False,
-                indent=2,
-                default=numpy_to_python,
-            )
+            json.dump(timestamp_data, f, ensure_ascii=False, indent=2)
 
         return {
             "success": True,
@@ -237,28 +218,17 @@ class PredictionService:
         }
 
 
-def numpy_to_python(obj):
-    """numpy型をPython標準型に変換"""
-    if isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    return obj
-
-
 def main():
     try:
         service = PredictionService()
         result = service.save_predictions_to_json()
 
-        print("\n✅ 予測データの生成が完了しました:")
+        print("\n予測データの生成が完了しました:")
         for name, file_path in result["files"].items():
             print(f"  - {name}: {file_path}")
 
     except Exception as e:
-        print(f"❌ 実行エラー: {str(e)}")
+        print(f"実行エラー: {str(e)}")
         sys.exit(1)
 
 

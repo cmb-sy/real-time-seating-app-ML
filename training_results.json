@@ -1,20 +1,26 @@
 {
   "density": {
-    "model_type": "random_forest",
-    "test_rmse": 11.62451279743705,
-    "test_mae": 9.504,
-    "test_r2": 0.48814659932659943,
-    "cv_rmse": 11.511602735104448,
-    "data_size": 23,
-    "feature_count": 10
+    "best_params": {
+      "n_estimators": 275,
+      "max_depth": 14,
+      "min_samples_split": 6,
+      "min_samples_leaf": 1,
+      "max_features": "sqrt"
+    },
+    "best_cv_rmse": 10.345249594533325,
+    "n_trials": 100,
+    "data_size": 23
   },
   "seats": {
-    "model_type": "random_forest",
-    "test_rmse": 1.4995782976762762,
-    "test_mae": 1.2994523809523808,
-    "test_r2": -0.653481669751234,
-    "cv_rmse": 1.4162745078131858,
-    "data_size": 23,
-    "feature_count": 10
+    "best_params": {
+      "n_estimators": 84,
+      "max_depth": 4,
+      "min_samples_split": 7,
+      "min_samples_leaf": 5,
+      "max_features": null
+    },
+    "best_cv_rmse": 1.6010682644181857,
+    "n_trials": 100,
+    "data_size": 23
   }
 }

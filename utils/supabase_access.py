@@ -9,7 +9,7 @@ import urllib.request
 
 
 def get_supabase_config():
-    """Supabase設定を取得"""
+    """Supabase設定取得"""
     try:
         supabase_url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
         service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -28,7 +28,7 @@ def get_supabase_config():
 
 
 def get_supabase_data(query_params=None):
-    """Supabaseから実データを取得（平日のみ対応）"""
+    """Supabaseから実データを取得"""
     supabase_url, supabase_key = get_supabase_config()
 
     if not supabase_url or not supabase_key:
@@ -78,12 +78,10 @@ def get_supabase_data(query_params=None):
 
 if __name__ == "__main__":
     try:
-        # 全データ取得テスト
         print("=== 全データ取得テスト ===")
         all_data = get_supabase_data()
         print(f"取得したデータ数: {len(all_data)}")
 
-        # 平日データ取得テスト（DB形式: 1-5）
         print("\n=== 平日データ取得テスト ===")
         weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日"]
         for i, db_day in enumerate(range(1, 6)):  # DB形式: 1-5
@@ -98,9 +96,8 @@ if __name__ == "__main__":
             weekend_data = get_supabase_data(
                 "day_of_week=eq.6&select=density_rate,occupied_seats"
             )
-            print("⚠️ 警告: 土曜日のデータが取得されました（本来はエラーになるべき）")
         except Exception as e:
-            print(f"✅ 期待通りエラー: {str(e)}")
+            print(f"期待通りエラー: {str(e)}")
 
     except Exception as e:
         print(f"テスト実行エラー: {str(e)}")
