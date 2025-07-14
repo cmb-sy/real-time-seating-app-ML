@@ -174,12 +174,8 @@ jobs:
           echo "```" >> $GITHUB_STEP_SUMMARY
           for file in "${expected_model_files[@]}"; do
             if [ -f "$file" ]; then
-              if [ "$(uname)" = "Darwin" ]; then
-                size=$(stat -f%z "$file")
-              else
-                size=$(stat -c%s "$file")
-              fi
-              echo "✅ $file ($size bytes)" >> $GITHUB_STEP_SUMMARY
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
+              echo "✅ $file (${size}bytes)" >> $GITHUB_STEP_SUMMARY
               model_files_found=$((model_files_found + 1))
             else
               echo "❌ $file が見つかりません" >> $GITHUB_STEP_SUMMARY
@@ -199,12 +195,8 @@ jobs:
           echo "```" >> $GITHUB_STEP_SUMMARY
           for file in "${expected_json_files[@]}"; do
             if [ -f "$file" ]; then
-              if [ "$(uname)" = "Darwin" ]; then
-                size=$(stat -f%z "$file")
-              else
-                size=$(stat -c%s "$file")
-              fi
-              echo "✅ $file ($size bytes)" >> $GITHUB_STEP_SUMMARY
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
+              echo "✅ $file (${size}bytes)" >> $GITHUB_STEP_SUMMARY
               json_files_found=$((json_files_found + 1))
             else
               echo "❌ $file が見つかりません" >> $GITHUB_STEP_SUMMARY
