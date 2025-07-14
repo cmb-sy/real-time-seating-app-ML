@@ -1,25 +1,17 @@
 {
-  "last_update": "2025-06-27T10:03:52.282798",
-  "available_files": {
-    "weekly_predictions": {
-      "file": "weekly_predictions.json",
-      "description": "今日から7日間の予測（土日含む）",
-      "data_type": "predictions",
-      "model_type": "ensemble_learning"
-    },
-    "weekly_averages": {
-      "file": "weekly_averages.json",
-      "description": "平日の曜日別データベース統計平均値（実データのみ）",
-      "data_type": "database_statistics",
-      "model_type": "statistical_average"
-    }
+  "last_update": "2025-07-14T13:18:01.118408",
+  "model_status": "ml_model_only",
+  "files": {
+    "weekly_predictions": "weekly_predictions.json",
+    "weekly_averages": "weekly_averages.json"
   },
-  "prediction_info": {
-    "has_trained_models": true,
-    "prediction_method": "ensemble_model",
-    "model_accuracy": {
-      "density_r2": "0.948",
-      "seats_r2": "0.663"
-    }
-  }
+  "weekday_format": "sunday_0_to_saturday_6",
+  "business_days": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "fallback_disabled": true
 }
