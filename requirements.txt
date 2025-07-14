@@ -1,7 +1,2 @@
-# デプロイ用（python3.12に合わせたバージョン）
-requests==2.32.4
-optuna==3.6.1
-scikit-learn==1.4.2
-pandas==2.2.2
-numpy==1.26.4
-joblib==1.4.2
+# API用
+# 機械学習パッケージは含めない（JSONファイルを読み取るだけ）
