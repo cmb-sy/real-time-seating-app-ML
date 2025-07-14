@@ -174,11 +174,15 @@ jobs:
           echo "```" >> $GITHUB_STEP_SUMMARY
           for file in "${expected_model_files[@]}"; do
             if [ -f "$file" ]; then
-              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "不明")
-              echo "✅ $file (${size} bytes)" | tee -a $GITHUB_STEP_SUMMARY
+              if [ "$(uname)" = "Darwin" ]; then
+                size=$(stat -f%z "$file")
+              else
+                size=$(stat -c%s "$file")
+              fi
+              echo "✅ $file ($size bytes)" >> $GITHUB_STEP_SUMMARY
               model_files_found=$((model_files_found + 1))
             else
-              echo "❌ $file が見つかりません" | tee -a $GITHUB_STEP_SUMMARY
+              echo "❌ $file が見つかりません" >> $GITHUB_STEP_SUMMARY
             fi
           done
           echo "```" >> $GITHUB_STEP_SUMMARY
@@ -195,11 +199,15 @@ jobs:
           echo "```" >> $GITHUB_STEP_SUMMARY
           for file in "${expected_json_files[@]}"; do
             if [ -f "$file" ]; then
-              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "不明")
-              echo "✅ $file (${size} bytes)" | tee -a $GITHUB_STEP_SUMMARY
+              if [ "$(uname)" = "Darwin" ]; then
+                size=$(stat -f%z "$file")
+              else
+                size=$(stat -c%s "$file")
+              fi
+              echo "✅ $file ($size bytes)" >> $GITHUB_STEP_SUMMARY
               json_files_found=$((json_files_found + 1))
             else
-              echo "❌ $file が見つかりません" | tee -a $GITHUB_STEP_SUMMARY
+              echo "❌ $file が見つかりません" >> $GITHUB_STEP_SUMMARY
             fi
           done
           echo "```" >> $GITHUB_STEP_SUMMARY
@@ -209,7 +217,7 @@ jobs:
           echo "total_files_found=$((model_files_found + json_files_found))" >> $GITHUB_OUTPUT
 
           # 最低限必要なファイルが生成されているかチェック
-          if [ $model_files_found -lt 2 ] || [ $json_files_found -lt 3 ]; then
+          if [ $model_files_found -lt 3 ] || [ $json_files_found -lt 3 ]; then
             echo "⚠️ 必要なファイルが不足しています"
             echo "  モデルファイル: ${model_files_found}/3"
             echo "  予測JSONファイル: ${json_files_found}/3"
