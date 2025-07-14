@@ -4,16 +4,13 @@
       "weekday": 0,
       "weekday_name": "日曜日",
       "density_rate": 0.0,
-      "occupied_seats": 0,
-      "data_type": "weekend_zero",
-      "data_count": 0
+      "occupied_seats": 0
     },
     {
       "weekday": 1,
       "weekday_name": "月曜日",
       "density_rate": 22.0,
       "occupied_seats": 6,
-      "data_type": "real_data_average",
       "data_count": 5
     },
     {
@@ -21,7 +18,6 @@
       "weekday_name": "火曜日",
       "density_rate": 27.5,
       "occupied_seats": 6,
-      "data_type": "real_data_average",
       "data_count": 4
     },
     {
@@ -29,7 +25,6 @@
       "weekday_name": "水曜日",
       "density_rate": 36.0,
       "occupied_seats": 7,
-      "data_type": "real_data_average",
       "data_count": 5
     },
     {
@@ -37,7 +32,6 @@
       "weekday_name": "木曜日",
       "density_rate": 40.0,
       "occupied_seats": 5,
-      "data_type": "real_data_average",
       "data_count": 5
     },
     {
@@ -45,16 +39,13 @@
       "weekday_name": "金曜日",
       "density_rate": 52.5,
       "occupied_seats": 6,
-      "data_type": "real_data_average",
       "data_count": 4
     },
     {
       "weekday": 6,
       "weekday_name": "土曜日",
       "density_rate": 0.0,
-      "occupied_seats": 0,
-      "data_type": "weekend_zero",
-      "data_count": 0
+      "occupied_seats": 0
     }
   ]
 }

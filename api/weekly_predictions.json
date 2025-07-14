@@ -4,57 +4,50 @@
       "date": "2025-07-14",
       "weekday": 1,
       "weekday_name": "月曜日",
-      "density_rate": 51.2,
-      "occupied_seats": 3,
-      "prediction_type": "ml_model"
+      "density_rate": 26.0,
+      "occupied_seats": 4
     },
     {
       "date": "2025-07-15",
       "weekday": 2,
       "weekday_name": "火曜日",
-      "density_rate": 51.2,
-      "occupied_seats": 3,
-      "prediction_type": "ml_model"
+      "density_rate": 26.15,
+      "occupied_seats": 4
     },
     {
       "date": "2025-07-16",
       "weekday": 3,
       "weekday_name": "水曜日",
-      "density_rate": 51.8,
-      "occupied_seats": 4,
-      "prediction_type": "ml_model"
+      "density_rate": 32.86,
+      "occupied_seats": 4
     },
     {
       "date": "2025-07-17",
       "weekday": 4,
       "weekday_name": "木曜日",
-      "density_rate": 55.4,
-      "occupied_seats": 3,
-      "prediction_type": "ml_model"
+      "density_rate": 33.1,
+      "occupied_seats": 4
     },
     {
       "date": "2025-07-18",
       "weekday": 5,
       "weekday_name": "金曜日",
-      "density_rate": 53.4,
-      "occupied_seats": 5,
-      "prediction_type": "ml_model"
+      "density_rate": 37.27,
+      "occupied_seats": 6
     },
     {
       "date": "2025-07-19",
       "weekday": 6,
       "weekday_name": "土曜日",
       "density_rate": 0.0,
-      "occupied_seats": 0,
-      "prediction_type": "weekend_zero"
+      "occupied_seats": 0
     },
     {
       "date": "2025-07-20",
       "weekday": 0,
       "weekday_name": "日曜日",
       "density_rate": 0.0,
-      "occupied_seats": 0,
-      "prediction_type": "weekend_zero"
+      "occupied_seats": 0
     }
   ]
 }

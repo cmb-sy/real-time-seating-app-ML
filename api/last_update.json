@@ -1,17 +1,7 @@
 {
-  "last_update": "2025-07-14T14:03:50.829288",
-  "model_status": "ml_model_only",
+  "last_update": "2025-07-14T15:51:05.685860",
   "files": {
     "weekly_predictions": "weekly_predictions.json",
     "weekly_averages": "weekly_averages.json"
-  },
-  "weekday_format": "sunday_0_to_saturday_6",
-  "business_days": [
-    1,
-    2,
-    3,
-    4,
-    5
-  ],
-  "fallback_disabled": true
+  }
 }

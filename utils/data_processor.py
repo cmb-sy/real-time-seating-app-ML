@@ -6,9 +6,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple
 
-# 現在のファイルのディレクトリを取得してパスに追加
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)  # 同じ階層を最優先に
+sys.path.insert(0, current_dir)
 
 from supabase_access import get_supabase_data
 
@@ -20,13 +19,10 @@ class MLDataProcessor:
 
     def load_data_from_supabase(self) -> pd.DataFrame:
         """
-        Supabaseからデータを取得してDataFrameに変換（平日のみ対応）
-
         Returns:
             pd.DataFrame: 取得したデータ
         """
         try:
-            # supabase_access.pyの関数を使用してデータを取得
             data = get_supabase_data()
             self.df = pd.DataFrame(data)
 
@@ -38,11 +34,8 @@ class MLDataProcessor:
                 self.df["created_at"], format="ISO8601"
             )
 
-            # 曜日を計算（月曜日=0, 日曜日=6）
-            self.df["weekday"] = self.df["created_at"].dt.weekday
-
             # DBの曜日形式に変換（月曜日=1, 金曜日=5）
-            self.df["day_of_week"] = self.df["weekday"] + 1
+            self.df["day_of_week"] = self.df["created_at"].dt.weekday + 1
 
             # 平日データのみフィルタリング（月-金: 1-5）
             self.df_weekdays = self.df[
@@ -55,28 +48,8 @@ class MLDataProcessor:
             return self.df_weekdays
 
         except Exception as e:
-            print(f"❌ Supabaseデータ取得エラー: {str(e)}")
+            print(f"Supabaseデータ取得エラー: {str(e)}")
             raise
-
-    def get_feature_columns(self) -> List[str]:
-        """
-        特徴量カラム名のリストを取得
-
-        Returns:
-            List[str]: 特徴量カラム名のリスト
-        """
-        return [
-            "day_of_week",
-            "density_seats_ratio",
-            "is_monday",
-            "is_tuesday",
-            "is_wednesday",
-            "is_thursday",
-            "is_friday",
-            "is_early_week",
-            "is_mid_week",
-            "is_late_week",
-        ]
 
     def create_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -133,7 +106,18 @@ class MLDataProcessor:
         # 特徴量エンジニアリングを実行
         ml_data = self.create_advanced_features(ml_data)
 
-        feature_columns = self.get_feature_columns()
+        feature_columns = [
+            "day_of_week",
+            "density_seats_ratio",
+            "is_monday",
+            "is_tuesday",
+            "is_wednesday",
+            "is_thursday",
+            "is_friday",
+            "is_early_week",
+            "is_mid_week",
+            "is_late_week",
+        ]
 
         # 存在する特徴量のみを選択（エラー回避）
         available_features = [col for col in feature_columns if col in ml_data.columns]
