@@ -190,7 +190,6 @@ data/
 .DS_Store
 .AppleDouble
 .LSOverride
-uv.lock
 
 # API keys & config
 config_local.py
@@ -208,5 +207,4 @@ api/env-check.py
 api/simple-test.py
 api/hello.py 
 .vercel
-
 node_modules/
